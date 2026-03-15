@@ -284,7 +284,7 @@ async function main() {
     },
   })
 
-  const waiterUser = await prisma.user.create({
+  await prisma.user.create({
     data: {
       locationId: location.id,
       firstName: 'Anna',

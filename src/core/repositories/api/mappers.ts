@@ -1,5 +1,11 @@
-// src/core/repositories/api/mappers.ts
-import type { CategoryId, Product, ModifierGroup, ModifierOption, Order, OrderItem } from "@/modules/Sale/types";
+import type {
+  CategoryId,
+  Product,
+  ModifierGroup,
+  ModifierOption,
+  Order,
+  OrderItem,
+} from "@/modules/Sale/types";
 
 export function toIdString(id: number | string): string {
   return String(id);
@@ -19,7 +25,6 @@ export function moneyToNumber(v: string | number | null | undefined): number {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 }
-
 
 export function categoryNameToUiId(name: string | null | undefined): CategoryId {
   const s = String(name ?? "").trim().toLowerCase();
@@ -42,7 +47,7 @@ export type ApiMenuItem = {
   id: number;
   categoryId: number;
   name: string;
-  basePrice: string; // decimal string
+  basePrice: string;
   isActive: boolean;
   hasModifiers: boolean;
   category?: { id: number; name: string } | null;
@@ -93,7 +98,6 @@ export function mapModifierGroup(group: ApiModifierGroup): ModifierGroup {
   };
 }
 
-
 export function buildUiOrder(params: {
   id: string;
   items: OrderItem[];
@@ -104,7 +108,11 @@ export function buildUiOrder(params: {
   memberId?: string;
   seatNumbers?: number[];
   scheduledTime?: Date | null;
+  discountTier?: number | null;
+  isNonMember?: boolean;
 }): Order {
+  void params.submittedAt;
+
   const subtotal = params.items.reduce((sum, it) => sum + it.price, 0);
   const tax = 0;
   const total = subtotal + tax;
@@ -117,10 +125,11 @@ export function buildUiOrder(params: {
     tax,
     total,
     createdAt: params.createdAt ?? new Date(),
-    submittedAt: params.submittedAt ?? undefined,
     tableId: params.tableId,
     memberId: params.memberId,
     seatNumbers: params.seatNumbers,
     scheduledTime: params.scheduledTime ?? undefined,
+    discountTier: params.discountTier ?? null,
+    isNonMember: params.isNonMember ?? false,
   };
 }

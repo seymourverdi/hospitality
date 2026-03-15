@@ -30,18 +30,6 @@ function isAuthorized(request: Request): boolean {
   return bearer === expectedKey || headerKey === expectedKey
 }
 
-async function getFallbackCloser(locationId: number) {
-  return prisma.user.findFirst({
-    where: {
-      locationId,
-      isActive: true,
-    },
-    orderBy: {
-      id: 'asc',
-    },
-  })
-}
-
 async function getOpenShift(locationId: number) {
   return prisma.shift.findFirst({
     where: {
@@ -132,10 +120,24 @@ export async function POST(
         const terminalId = order.terminalId
         const shiftId = order.shiftId
 
+        let finalShiftId = shiftId
+
+        if (!finalShiftId) {
+          const openShift = await getOpenShift(order.locationId)
+          if (!openShift) {
+            return {
+              ok: false as const,
+              status: 409,
+              error: 'No open shift found',
+            }
+          }
+          finalShiftId = openShift.id
+        }
+
         await tx.payment.create({
           data: {
             orderId: order.id,
-            shiftId,
+            shiftId: finalShiftId,
             terminalId,
             amount: remaining.toString(),
             tipAmount: '0.00',
@@ -150,16 +152,15 @@ export async function POST(
         paymentCreated = true
       }
 
-      const closer =
-        (await tx.user.findFirst({
-          where: {
-            locationId: order.locationId,
-            isActive: true,
-          },
-          orderBy: {
-            id: 'asc',
-          },
-        })) ?? null
+      const closer = await tx.user.findFirst({
+        where: {
+          locationId: order.locationId,
+          isActive: true,
+        },
+        orderBy: {
+          id: 'asc',
+        },
+      })
 
       await tx.order.update({
         where: {

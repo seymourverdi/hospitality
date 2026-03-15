@@ -168,7 +168,7 @@ export async function POST(req: Request, ctx: RouteContext) {
       const ticketsOut: TicketOut[] = [];
       let totalSentCount = 0;
 
-      for (const g of groups.values()) {
+      for (const g of Array.from(groups.values())) {
         const ticket = await tx.kitchenTicket.create({
           data: {
             locationId: auth.locationId,

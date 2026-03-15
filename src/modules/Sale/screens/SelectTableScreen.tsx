@@ -6,7 +6,7 @@
 import * as React from 'react';
 import { cn } from '@/core/lib/utils';
 import { useSale } from '../context/SaleContext';
-import type { Table, Floor } from '../types';
+import type {Table} from '../types';
 
 type ApiTable = {
   id: string;

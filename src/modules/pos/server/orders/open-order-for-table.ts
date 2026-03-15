@@ -1,105 +1,171 @@
 import { prisma } from '@/server/db'
-import { getPosSession } from '@/modules/pos/server/session/pos-session'
 
-export class OpenOrderError extends Error {
-  statusCode: number
+type OpenOrderForTableResult =
+  | {
+      ok: true
+      orderId: string
+      reused: boolean
+    }
+  | {
+      ok: false
+      error: string
+      status: number
+    }
 
-  constructor(message: string, statusCode = 400) {
-    super(message)
-    this.name = 'OpenOrderError'
-    this.statusCode = statusCode
+function toPositiveInt(value: string): number | null {
+  const n = Number(value)
+  if (!Number.isInteger(n) || n <= 0) {
+    return null
   }
+  return n
 }
 
-type OpenOrderForTableResult = {
-  orderId: string
-  tableId: string
-  created: boolean
-}
+export async function openOrderForTable(tableId: string): Promise<OpenOrderForTableResult> {
+  const tableIdNum = toPositiveInt(tableId)
 
-export async function openOrderForTable(
-  tableId: string,
-): Promise<OpenOrderForTableResult> {
-  const session = await getPosSession()
-
-  if (!session) {
-    throw new OpenOrderError('Unauthorized', 401)
+  if (!tableIdNum) {
+    return {
+      ok: false,
+      error: 'Invalid table id',
+      status: 400,
+    }
   }
 
   const table = await prisma.table.findUnique({
-    where: { id: tableId },
+    where: { id: tableIdNum },
     select: {
       id: true,
+      locationId: true,
       activeOrderId: true,
+      isActive: true,
     },
   })
 
-  if (!table) {
-    throw new OpenOrderError('Table not found', 404)
+  if (!table || !table.isActive) {
+    return {
+      ok: false,
+      error: 'Table not found',
+      status: 404,
+    }
   }
 
   if (table.activeOrderId) {
     return {
-      orderId: table.activeOrderId,
-      tableId: table.id,
-      created: false,
+      ok: true,
+      orderId: String(table.activeOrderId),
+      reused: true,
     }
   }
 
-  const result = await prisma.$transaction(async (tx) => {
-    const freshTable = await tx.table.findUnique({
-      where: { id: tableId },
-      select: {
-        id: true,
-        activeOrderId: true,
-      },
-    })
-
-    if (!freshTable) {
-      throw new OpenOrderError('Table not found', 404)
-    }
-
-    if (freshTable.activeOrderId) {
-      return {
-        orderId: freshTable.activeOrderId,
-        tableId: freshTable.id,
-        created: false,
-      }
-    }
-
-    /*
-      Replace fields below with your real hospitality schema fields.
-      The main requirement is:
-      - create a new open order
-      - bind it to the selected table
-      - optionally attach user/location/terminal/session info
-    */
-    const order = await tx.order.create({
-      data: {
-        status: 'OPEN',
-        tableId: freshTable.id,
-        locationId: session.locationId ?? undefined,
-        terminalId: session.terminalId ?? undefined,
-        openedByUserId: session.userId,
-      },
-      select: {
-        id: true,
-      },
-    })
-
-    await tx.table.update({
-      where: { id: freshTable.id },
-      data: {
-        activeOrderId: order.id,
-      },
-    })
-
-    return {
-      orderId: order.id,
-      tableId: freshTable.id,
-      created: true,
-    }
+  const terminal = await prisma.terminal.findFirst({
+    where: {
+      locationId: table.locationId,
+      isActive: true,
+    },
+    orderBy: {
+      id: 'asc',
+    },
+    select: {
+      id: true,
+    },
   })
 
-  return result
+  if (!terminal) {
+    return {
+      ok: false,
+      error: 'No active terminal found',
+      status: 409,
+    }
+  }
+
+  const user = await prisma.user.findFirst({
+    where: {
+      locationId: table.locationId,
+      isActive: true,
+    },
+    orderBy: {
+      id: 'asc',
+    },
+    select: {
+      id: true,
+    },
+  })
+
+  if (!user) {
+    return {
+      ok: false,
+      error: 'No active user found',
+      status: 409,
+    }
+  }
+
+  let shift = await prisma.shift.findFirst({
+    where: {
+      locationId: table.locationId,
+      status: 'OPEN',
+    },
+    orderBy: {
+      openedAt: 'desc',
+    },
+    select: {
+      id: true,
+    },
+  })
+
+  if (!shift) {
+    shift = await prisma.shift.create({
+      data: {
+        locationId: table.locationId,
+        userId: user.id,
+        terminalId: terminal.id,
+        openedAt: new Date(),
+        openingCashAmount: '0.00',
+        status: 'OPEN',
+      },
+      select: {
+        id: true,
+      },
+    })
+  }
+
+  const order = await prisma.order.create({
+    data: {
+      locationId: table.locationId,
+      terminalId: terminal.id,
+      shiftId: shift.id,
+      tableId: table.id,
+      guestId: null,
+      membershipId: null,
+      parentOrderId: null,
+      orderType: 'DINE_IN',
+      status: 'OPEN',
+      subtotalAmount: '0.00',
+      discountAmount: '0.00',
+      serviceChargeAmount: '0.00',
+      taxAmount: '0.00',
+      totalAmount: '0.00',
+      openedByUserId: user.id,
+      closedByUserId: null,
+      openedAt: new Date(),
+      closedAt: null,
+      note: null,
+    },
+    select: {
+      id: true,
+    },
+  })
+
+  await prisma.table.update({
+    where: { id: table.id },
+    data: {
+      activeOrderId: order.id,
+      status: 'occupied',
+    },
+  })
+
+  return {
+    ok: true,
+    orderId: String(order.id),
+    reused: false,
+  }
 }

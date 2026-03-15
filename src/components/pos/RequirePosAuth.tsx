@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { Route } from "next";
 import { usePathname, useRouter } from "next/navigation";
 import { assertOk, clearPosToken, getPosToken, authFetch } from "@/lib/pos/auth-client";
 
@@ -28,7 +29,7 @@ export default function RequirePosAuth({ children }: { children: React.ReactNode
       const token = getPosToken();
       if (!token) {
         clearPosToken();
-        router.replace(buildLoginUrl(pathname));
+        router.replace(buildLoginUrl(pathname) as Route);
         return;
       }
 
@@ -46,11 +47,11 @@ export default function RequirePosAuth({ children }: { children: React.ReactNode
         if (!alive) return;
 
         if (isUnauthorized) {
-          router.replace(buildLoginUrl(pathname));
+          router.replace(buildLoginUrl(pathname) as Route);
           return;
         }
 
-        router.replace(buildLoginUrl(pathname));
+        router.replace(buildLoginUrl(pathname) as Route);
       }
     }
 

@@ -1,8 +1,11 @@
-// src/core/repositories/api/OrderRepository.ts
-import type { IOrderRepository, SubmitOrderData, Order as RepoOrder } from "@/core/repositories/types";
+import type {
+  IOrderRepository,
+  SubmitOrderData,
+  Order as RepoOrder,
+} from "@/core/repositories/types";
 import type { OrderItem } from "@/modules/Sale/types";
 import { ApiClient } from "./http";
-import { buildUiOrder, toIdNumber, toIdString } from "./mappers";
+import { toIdNumber, toIdString } from "./mappers";
 
 type OpenOrderResponse = {
   ok: true;
@@ -23,6 +26,45 @@ type AddItemResponse = {
   };
 };
 
+function buildRepoOrder(params: {
+  id: string;
+  items: OrderItem[];
+  status: RepoOrder["status"];
+  createdAt?: Date;
+  submittedAt?: Date;
+  tableId?: string;
+  memberId?: string;
+  memberName?: string;
+  seatNumbers?: number[];
+  scheduledTime?: Date | null;
+  discountPercent?: number;
+}): RepoOrder {
+  const subtotal = params.items.reduce((sum, it) => sum + it.price, 0);
+  const discountPercent = params.discountPercent ?? 0;
+  const discountAmount = subtotal * (discountPercent / 100);
+  const taxableSubtotal = subtotal - discountAmount;
+  const tax = 0;
+  const total = taxableSubtotal + tax;
+
+  return {
+    id: params.id,
+    orderNumber: params.id,
+    status: params.status,
+    items: params.items,
+    memberId: params.memberId,
+    memberName: params.memberName,
+    tableId: params.tableId,
+    seatNumbers: params.seatNumbers,
+    subtotal,
+    discountPercent,
+    tax,
+    total,
+    scheduledTime: params.scheduledTime ?? undefined,
+    createdAt: params.createdAt ?? new Date(),
+    submittedAt: params.submittedAt ?? undefined,
+  };
+}
+
 export class ApiOrderRepository implements IOrderRepository {
   private api: ApiClient;
   private orders = new Map<string, RepoOrder>();
@@ -33,7 +75,7 @@ export class ApiOrderRepository implements IOrderRepository {
 
   async createOrder(items: OrderItem[]): Promise<RepoOrder> {
     const id = `draft-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    const order = buildUiOrder({
+    const order = buildRepoOrder({
       id,
       items,
       status: "draft",
@@ -48,8 +90,7 @@ export class ApiOrderRepository implements IOrderRepository {
     const existing = await this.getOrderById(orderId);
     if (!existing) throw new Error("Order not found");
 
-    const next = buildUiOrder({
-      ...existing,
+    const next = buildRepoOrder({
       id: existing.id,
       items,
       status: existing.status,
@@ -60,6 +101,7 @@ export class ApiOrderRepository implements IOrderRepository {
       memberName: existing.memberName,
       seatNumbers: existing.seatNumbers,
       scheduledTime: existing.scheduledTime ?? null,
+      discountPercent: existing.discountPercent,
     });
 
     this.orders.set(orderId, next);
@@ -91,17 +133,19 @@ export class ApiOrderRepository implements IOrderRepository {
     const existing = await this.getOrderById(orderId);
     if (!existing) throw new Error("Order not found");
 
-    return this.updateOrder(orderId, existing.items.filter((it) => it.id !== itemId));
+    return this.updateOrder(
+      orderId,
+      existing.items.filter((it) => it.id !== itemId)
+    );
   }
 
   async applyDiscount(orderId: string, tier: number | null): Promise<RepoOrder> {
     const existing = await this.getOrderById(orderId);
     if (!existing) throw new Error("Order not found");
 
-    
-    const discountPercent = tier ? tier : 0;
+    const discountPercent = tier ?? 0;
 
-    const next = buildUiOrder({
+    const next = buildRepoOrder({
       id: existing.id,
       items: existing.items,
       status: existing.status,
@@ -111,8 +155,8 @@ export class ApiOrderRepository implements IOrderRepository {
       memberId: existing.memberId,
       memberName: existing.memberName,
       seatNumbers: existing.seatNumbers,
-      discountPercent,
       scheduledTime: existing.scheduledTime ?? null,
+      discountPercent,
     });
 
     this.orders.set(orderId, next);
@@ -123,14 +167,18 @@ export class ApiOrderRepository implements IOrderRepository {
     const existing = await this.getOrderById(orderId);
     if (!existing) throw new Error("Order not found");
 
-    const next = buildUiOrder({
-      ...existing,
+    const next = buildRepoOrder({
       id: existing.id,
       items: existing.items,
       status: existing.status,
       createdAt: existing.createdAt,
       submittedAt: existing.submittedAt,
+      tableId: existing.tableId,
+      memberId: existing.memberId,
+      memberName: existing.memberName,
+      seatNumbers: existing.seatNumbers,
       scheduledTime: time,
+      discountPercent: existing.discountPercent,
     });
 
     this.orders.set(orderId, next);
@@ -145,20 +193,19 @@ export class ApiOrderRepository implements IOrderRepository {
       throw new Error("tableId is required to submit order (backend requires table)");
     }
 
-    // 1) open/reuse order on table
     const tableIdNum = toIdNumber(data.tableId);
-    const opened = await this.api.post<OpenOrderResponse>(`/api/pos/tables/${tableIdNum}/open-order`, {
-      orderType: "DINE_IN",
-    });
+    const opened = await this.api.post<OpenOrderResponse>(
+      `/api/pos/tables/${tableIdNum}/open-order`,
+      {
+        orderType: "DINE_IN",
+      }
+    );
 
     const backendOrderId = opened.order.id;
 
-    // 2) push items to backend
     for (const it of existing.items) {
       const menuItemId = toIdNumber(it.productId);
-
       const modifierOptionIds = (it.modifiers ?? []).map((m) => toIdNumber(m.optionId));
-
       const seatNumber =
         data.seatNumbers && data.seatNumbers.length > 0 ? data.seatNumbers[0] : null;
 
@@ -171,8 +218,7 @@ export class ApiOrderRepository implements IOrderRepository {
       });
     }
 
-    // 3) return submitted order (UI side)
-    const submitted = buildUiOrder({
+    const submitted = buildRepoOrder({
       id: toIdString(backendOrderId),
       items: existing.items,
       status: "submitted",
@@ -183,7 +229,7 @@ export class ApiOrderRepository implements IOrderRepository {
       memberName: existing.memberName,
       seatNumbers: data.seatNumbers,
       scheduledTime: data.scheduledTime ?? null,
-      notes: data.notes ?? null,
+      discountPercent: existing.discountPercent,
     });
 
     this.orders.set(submitted.id, submitted);
@@ -194,9 +240,7 @@ export class ApiOrderRepository implements IOrderRepository {
     const existing = await this.getOrderById(orderId);
     if (!existing) throw new Error("Order not found");
 
-    // Если orderId уже backend-id, можно дернуть /api/pos/orders/:id/void
-    // TODO: включить реальный cancel на backend когда решим правила.
-    const cancelled = buildUiOrder({
+    const cancelled = buildRepoOrder({
       id: existing.id,
       items: existing.items,
       status: "cancelled",
@@ -207,6 +251,7 @@ export class ApiOrderRepository implements IOrderRepository {
       memberName: existing.memberName,
       seatNumbers: existing.seatNumbers,
       scheduledTime: existing.scheduledTime ?? null,
+      discountPercent: existing.discountPercent,
     });
 
     this.orders.set(orderId, cancelled);

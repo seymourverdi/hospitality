@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
 import { prisma } from "@/server/db/prisma";
 import { requireAuth } from "@/server/api/auth";
 

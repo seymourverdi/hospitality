@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import type { Route } from "next";
 import { usePathname, useRouter } from "next/navigation";
 
 type NavItem = {
@@ -186,7 +187,7 @@ export function PosSidebar() {
               enabled={enabled}
               label={it.label}
               icon={it.icon}
-              onClick={() => router.push(it.href)}
+              onClick={() => router.push(it.href as Route)}
             />
           );
         })}
@@ -200,7 +201,7 @@ export function PosSidebar() {
           enabled={true}
           label="Admin"
           icon={<IconGear />}
-          onClick={() => router.push("/admin")}
+          onClick={() => router.push("/admin" as Route)}
         />
       </div>
     </aside>

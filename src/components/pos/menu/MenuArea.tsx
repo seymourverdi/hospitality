@@ -1,4 +1,14 @@
-import { MenuItem, Order } from "../PosScreen";
+"use client";
+
+type MenuItem = {
+  id: number;
+  name: string;
+  basePrice: string | number;
+};
+
+type Order = {
+  id: number;
+};
 
 type Props = {
   items: MenuItem[];
@@ -13,7 +23,10 @@ export default function MenuArea({ items, order, refreshOrder }: Props) {
     await fetch(`/api/pos/orders/${order.id}/items`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ menuItemId, quantity: 1 }),
+      body: JSON.stringify({
+        menuItemId,
+        quantity: 1,
+      }),
     });
 
     await refreshOrder();

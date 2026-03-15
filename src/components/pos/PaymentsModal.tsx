@@ -143,7 +143,6 @@ export default function PaymentsModal({ open, orderId, onClose, onAfterChange }:
     const t = money(tip || "0");
 
     const aDec = new Prisma.Decimal(a);
-    const tDec = new Prisma.Decimal(t);
 
     if (aDec.lte(0)) {
       setError("Amount must be greater than 0.");
