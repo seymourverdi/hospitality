@@ -147,7 +147,7 @@ async function main() {
     kdsStationId: bar.id,
   });
 
-  const cheesecake = await getOrCreateItem({
+  await getOrCreateItem({
     categoryId: catDesserts.id,
     name: "Cheesecake",
     sku: "DS-001",

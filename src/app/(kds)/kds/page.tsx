@@ -1,5 +1,5 @@
-import KdsScreen from "@/components/kds/KdsScreen";
+import { redirect } from 'next/navigation'
 
-export default function Page() {
-  return <KdsScreen />;
+export default function KdsPage() {
+  redirect('/display')
 }

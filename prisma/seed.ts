@@ -6,7 +6,6 @@ import {
   KdsStatus,
   KitchenTicketStatus,
   MembershipLevel,
-  ModifierGroup,
   OrderItemStatus,
   OrderStatus,
   OrderType,
