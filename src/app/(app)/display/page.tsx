@@ -1,191 +1,37 @@
-// City Club HMS - Display (Kitchen) Page
-// Kitchen display screen matching Figma design exactly
-
 'use client';
 
 import * as React from 'react';
-import { ChevronDown, Check, Clock } from 'lucide-react';
+import { Check, ChevronDown, Clock } from 'lucide-react';
 import { cn } from '@/core/lib/utils';
 
-// Sample ticket data matching Figma
-const ticketsData = {
-  incoming: [
-    {
-      id: '1',
-      items: [
-        {
-          id: '1a',
-          name: 'Grilled Cheese and Tomato Soup',
-          modifier: 'Extra Toasted Please and extra butter',
-          allergy: null,
-          seat: 2,
-          server: 'Stefan du Toit',
-          completed: false,
-        },
-        {
-          id: '1b',
-          name: 'Gotham Greens Salad with Chicken',
-          modifier: null,
-          allergy: 'No Dairy Please (Dairy Allergy)',
-          seat: 2,
-          server: 'Lidia Jones',
-          completed: false,
-        },
-        {
-          id: '1c',
-          name: 'Gotham Greens Salad with Chicken',
-          modifier: null,
-          allergy: 'No Dairy Please (Dairy Allergy)',
-          seat: 2,
-          server: 'Lidia Jones',
-          completed: false,
-        },
-      ],
-      time: '4:58pm',
-      elapsed: '1 Minute 36 Seconds...',
-    },
-    {
-      id: '2',
-      course: 'Course Two',
-      items: [
-        {
-          id: '2a',
-          name: 'Grilled Cheese and Tomato Soup',
-          modifier: 'Extra Toasted Please and extra butter',
-          allergy: null,
-          seat: 2,
-          server: 'Stefan du Toit',
-          completed: false,
-        },
-        {
-          id: '2b',
-          name: 'Gotham Greens Salad with Chicken',
-          modifier: null,
-          allergy: 'No Dairy Please (Dairy Allergy)',
-          seat: 2,
-          server: 'Lidia Jones',
-          completed: false,
-        },
-        {
-          id: '2c',
-          name: 'Gotham Greens Salad with Chicken',
-          modifier: null,
-          allergy: 'No Dairy Please (Dairy Allergy)',
-          seat: 2,
-          server: 'Lidia Jones',
-          completed: true,
-        },
-      ],
-      time: '4:58pm',
-      elapsed: '1 Minute 36 Seconds...',
-    },
-  ],
-  fired: [
-    {
-      id: '3',
-      course: 'Course One',
-      courseCount: 1,
-      items: [
-        {
-          id: '3a',
-          name: 'Grilled Cheese and Tomato Soup',
-          modifier: 'Extra Toasted Please and extra butter',
-          allergy: null,
-          seat: 2,
-          server: 'Stefan du Toit',
-          completed: true,
-        },
-        {
-          id: '3b',
-          name: 'Gotham Greens Salad with Chicken',
-          modifier: null,
-          allergy: 'No Dairy Please (Dairy Allergy)',
-          seat: 2,
-          server: 'Lidia Jones',
-          completed: false,
-        },
-        {
-          id: '3c',
-          name: 'Gotham Greens Salad with Chicken',
-          modifier: null,
-          allergy: 'No Dairy Please (Dairy Allergy)',
-          seat: 2,
-          server: 'Lidia Jones',
-          completed: false,
-        },
-      ],
-      time: '4:58pm',
-      elapsed: '1 Minute 38 Seconds...',
-    },
-    {
-      id: '4',
-      course: 'Course Two',
-      courseCount: 2,
-      items: [
-        {
-          id: '4a',
-          name: 'Grilled Cheese and Tomato Soup',
-          modifier: 'Extra Toasted Please and extra butter',
-          allergy: null,
-          seat: 2,
-          server: 'Stefan du Toit',
-          completed: false,
-        },
-        {
-          id: '4b',
-          name: 'Gotham Greens Salad with Chicken',
-          modifier: null,
-          allergy: 'No Dairy Please (Dairy Allergy)',
-          seat: 2,
-          server: 'Lidia Jones',
-          completed: false,
-        },
-      ],
-      time: '4:58pm',
-      elapsed: '1 Minute 38 Seconds...',
-    },
-  ],
-  complete: [
-    {
-      id: '5',
-      items: [
-        {
-          id: '5a',
-          name: 'Grilled Cheese and Tomato Soup',
-          modifier: 'Extra Toasted Please and extra butter',
-          allergy: null,
-          seat: 2,
-          server: 'Stefan du Toit',
-          completed: true,
-        },
-        {
-          id: '5b',
-          name: 'Gotham Greens Salad with Chicken',
-          modifier: null,
-          allergy: 'No Dairy Please (Dairy Allergy)',
-          seat: 2,
-          server: 'Lidia Jones',
-          completed: true,
-        },
-      ],
-      time: '4:58pm',
-      elapsed: '1 Minute 38 Seconds...',
-    },
-  ],
+type UiTicketItem = {
+  id: string;
+  ticketItemId: string;
+  name: string;
+  modifier: string | null;
+  allergy: string | null;
+  seat: number | null;
+  server: string | null;
+  completed: boolean;
 };
 
-// Count bar items
-const countItems = [
-  { name: 'Gotham Greens Salad with Chicken', count: 2, color: '#22C55E' },
-  { name: 'Grilled Cheese', count: 1, color: '#22C55E' },
-  { name: 'House Dessert', count: 1, color: '#22C55E' },
-  { name: 'Chocolate Bark', count: 1, color: '#A855F7' },
-  { name: 'Side: Chicken', count: 1, color: '#F97316' },
-  { name: 'Ham & Gruyere Croissant Sandwich', count: 1, color: '#22C55E' },
-  { name: 'Chicken Quesadilla', count: 1, color: '#22C55E' },
-];
+type UiTicket = {
+  id: string;
+  orderId: number;
+  tableName: string | null;
+  course: string | null;
+  time: string;
+  elapsed: string;
+  status: 'incoming' | 'fired' | 'complete';
+  items: UiTicketItem[];
+};
 
-// Filter Dropdown Button
+type TicketsResponse = {
+  ok: boolean;
+  tickets?: UiTicket[];
+  error?: string;
+};
+
 function FilterDropdown({ label, icon }: { label: string; icon?: React.ReactNode }) {
   return (
     <button className="flex items-center gap-1 px-2 py-1 rounded bg-primary/20 text-primary text-xs">
@@ -196,216 +42,333 @@ function FilterDropdown({ label, icon }: { label: string; icon?: React.ReactNode
   );
 }
 
-// Ticket Item Component
-function TicketItem({
+function TicketItemRow({
   item,
-  showCheckbox = true,
+  column,
+  onAction,
+  busyId,
 }: {
-  item: typeof ticketsData.incoming[0]['items'][0];
-  showCheckbox?: boolean;
+  item: UiTicketItem;
+  column: 'incoming' | 'fired' | 'complete';
+  onAction: (ticketItemId: string, action: 'start' | 'ready' | 'serve') => void;
+  busyId: string | null;
 }) {
+  const isBusy = busyId === item.ticketItemId;
+
   return (
     <div className="flex items-start gap-2 py-2 border-b border-white/5 last:border-0">
-      {showCheckbox && (
-        <div
-          className={cn(
-            'w-5 h-5 rounded border flex items-center justify-center flex-shrink-0 mt-0.5',
-            item.completed
-              ? 'bg-primary border-primary'
-              : 'border-white/30'
-          )}
-        >
-          {item.completed && <Check className="h-3 w-3 text-black" />}
-        </div>
-      )}
+      <div
+        className={cn(
+          'w-5 h-5 rounded border flex items-center justify-center flex-shrink-0 mt-0.5',
+          item.completed ? 'bg-primary border-primary' : 'border-white/30'
+        )}
+      >
+        {item.completed && <Check className="h-3 w-3 text-black" />}
+      </div>
+
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2">
           <span className="text-white text-sm">{item.name}</span>
           {item.completed && <Check className="h-4 w-4 text-primary flex-shrink-0" />}
         </div>
-        {item.modifier && (
+
+        {item.modifier ? (
           <p className="text-orange-400 text-xs mt-1">{item.modifier}</p>
-        )}
-        {item.allergy && (
+        ) : null}
+
+        {item.allergy ? (
           <p className="text-red-400 text-xs mt-1">{item.allergy}</p>
-        )}
-        <div className="flex items-center gap-2 mt-2 text-xs text-white/50">
-          <span className="flex items-center gap-1">
-            Seat {item.seat} <ChevronDown className="h-3 w-3" />
-          </span>
-          <span>•</span>
-          <span className="flex items-center gap-1">
-            👤 {item.server}
-          </span>
+        ) : null}
+
+        <div className="flex items-center gap-2 mt-2 text-xs text-white/50 flex-wrap">
+          {typeof item.seat === 'number' ? (
+            <>
+              <span className="flex items-center gap-1">
+                Seat {item.seat} <ChevronDown className="h-3 w-3" />
+              </span>
+              <span>•</span>
+            </>
+          ) : null}
+
+          {item.server ? <span>{item.server}</span> : null}
+        </div>
+
+        <div className="mt-3">
+          {column === 'incoming' ? (
+            <button
+              type="button"
+              disabled={isBusy}
+              onClick={() => onAction(item.ticketItemId, 'start')}
+              className="rounded-lg bg-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-300 disabled:opacity-50"
+            >
+              {isBusy ? 'Starting...' : 'Start'}
+            </button>
+          ) : null}
+
+          {column === 'fired' ? (
+            <button
+              type="button"
+              disabled={isBusy}
+              onClick={() => onAction(item.ticketItemId, 'ready')}
+              className="rounded-lg bg-blue-500/20 px-3 py-1.5 text-xs font-medium text-blue-300 disabled:opacity-50"
+            >
+              {isBusy ? 'Updating...' : 'Ready'}
+            </button>
+          ) : null}
+
+          {column === 'complete' && !item.completed ? (
+            <button
+              type="button"
+              disabled={isBusy}
+              onClick={() => onAction(item.ticketItemId, 'serve')}
+              className="rounded-lg bg-emerald-500/20 px-3 py-1.5 text-xs font-medium text-emerald-300 disabled:opacity-50"
+            >
+              {isBusy ? 'Serving...' : 'Serve'}
+            </button>
+          ) : null}
         </div>
       </div>
     </div>
   );
 }
 
-// Ticket Card Component
 function TicketCard({
   ticket,
-  columnType,
+  column,
+  onAction,
+  busyId,
 }: {
-  ticket: typeof ticketsData.incoming[0];
-  columnType: 'incoming' | 'fired' | 'complete';
+  ticket: UiTicket;
+  column: 'incoming' | 'fired' | 'complete';
+  onAction: (ticketItemId: string, action: 'start' | 'ready' | 'serve') => void;
+  busyId: string | null;
 }) {
-  const bgColor = columnType === 'incoming'
-    ? 'bg-[#1a1a1a]'
-    : columnType === 'fired'
-      ? 'bg-blue-900/30'
-      : 'bg-green-900/30';
-
   return (
-    <div className={cn('rounded-xl overflow-hidden', bgColor)}>
-      {/* Header */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-white/10">
-        <FilterDropdown label="Location" />
-        <FilterDropdown label="Table" />
-        <button className="ml-auto text-white/50">
-          <Clock className="h-4 w-4" />
-        </button>
-      </div>
-
-      {/* Course Header (if applicable) */}
-      {ticket.course && (
-        <div className="flex items-center justify-between px-3 py-2 bg-blue-500">
-          <span className="text-white text-sm font-medium">{ticket.course}</span>
+    <div className="rounded-2xl bg-[#333333] border border-white/10 p-4">
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div>
+          <div className="text-white font-semibold">
+            Table {ticket.tableName ?? '—'}
+          </div>
+          <div className="text-xs text-white/50 mt-1">
+            Order #{ticket.orderId}
+          </div>
         </div>
-      )}
 
-      {/* Items */}
-      <div className="px-3">
-        {ticket.items.map((item) => (
-          <TicketItem key={item.id} item={item} />
-        ))}
+        <div className="text-right">
+          <div className="text-xs text-white/70">{ticket.time}</div>
+          <div className="text-[11px] text-orange-300 mt-1">{ticket.elapsed}</div>
+        </div>
       </div>
 
-      {/* Footer */}
-      <div className="px-3 py-2 border-t border-white/10 flex items-center justify-between text-xs text-white/50">
-        <span>Today {ticket.time}</span>
-        <span>{ticket.elapsed}</span>
+      {ticket.course ? (
+        <div className="text-xs font-medium text-primary mb-3">{ticket.course}</div>
+      ) : null}
+
+      <div>
+        {ticket.items.map((item) => (
+          <TicketItemRow
+            key={item.id}
+            item={item}
+            column={column}
+            onAction={onAction}
+            busyId={busyId}
+          />
+        ))}
       </div>
     </div>
   );
 }
 
-// Column Component
 function Column({
   title,
   tickets,
-  type,
-  count,
+  column,
+  onAction,
+  busyId,
 }: {
   title: string;
-  tickets: typeof ticketsData.incoming;
-  type: 'incoming' | 'fired' | 'complete';
-  count: number;
+  tickets: UiTicket[];
+  column: 'incoming' | 'fired' | 'complete';
+  onAction: (ticketItemId: string, action: 'start' | 'ready' | 'serve') => void;
+  busyId: string | null;
 }) {
-  const headerColor = type === 'incoming'
-    ? 'text-white/60'
-    : type === 'fired'
-      ? 'text-blue-400'
-      : 'text-green-400';
-
-  const dotColor = type === 'incoming'
-    ? 'bg-white/40'
-    : type === 'fired'
-      ? 'bg-blue-400'
-      : 'bg-green-400';
-
   return (
-    <div className="flex-1 flex flex-col min-w-[350px]">
-      {/* Column Header */}
-      <div className="flex items-center justify-between px-3 py-3">
-        <div className="flex items-center gap-2">
-          <span className={cn('w-2 h-2 rounded-full', dotColor)} />
-          <span className={cn('font-semibold', headerColor)}>{title}</span>
-        </div>
-        <span className="w-6 h-6 rounded-full bg-white/10 text-white/60 text-xs flex items-center justify-center">
-          {count}
+    <div className="rounded-2xl bg-[#2A2A2A] border border-white/10 p-4 min-h-[480px]">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-white text-lg font-semibold">{title}</h2>
+        <span className="rounded-full bg-white/10 px-2.5 py-1 text-xs text-white/70">
+          {tickets.length}
         </span>
       </div>
 
-      {/* Tickets */}
-      <div className="flex-1 overflow-y-auto space-y-3 px-2">
-        {tickets.map((ticket) => (
-          <TicketCard key={ticket.id} ticket={ticket} columnType={type} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// Count Bar Component
-function CountBar() {
-  return (
-    <div className="flex items-center gap-2 px-4 py-3 bg-[#1a1a1a] border-t border-white/10 overflow-x-auto">
-      <div className="flex items-center gap-2 text-white/60 text-sm flex-shrink-0">
-        <span className="text-xl">≡</span>
-        <span className="font-medium">Count</span>
-      </div>
-      {countItems.map((item, idx) => (
-        <div
-          key={idx}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-full flex-shrink-0"
-          style={{ backgroundColor: `${item.color}20` }}
-        >
-          <span
-            className="w-5 h-5 rounded-full text-white text-xs font-bold flex items-center justify-center"
-            style={{ backgroundColor: item.color }}
-          >
-            {item.count}
-          </span>
-          <span className="text-white text-xs">{item.name}</span>
-        </div>
-      ))}
-
-      {/* Right side controls */}
-      <div className="ml-auto flex items-center gap-3 flex-shrink-0">
-        <span className="px-3 py-1 rounded bg-primary text-black text-xs font-medium">
-          Scheduled
-        </span>
-        <div className="flex items-center gap-2 text-white/60 text-xs">
-          <span>All</span>
-          <span>Bar</span>
-        </div>
-        <button className="px-3 py-1 rounded bg-primary text-black text-xs font-medium">
-          Kitchen
-        </button>
+      <div className="space-y-4">
+        {tickets.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-white/10 p-6 text-center text-sm text-white/40">
+            No tickets
+          </div>
+        ) : (
+          tickets.map((ticket) => (
+            <TicketCard
+              key={ticket.id}
+              ticket={ticket}
+              column={column}
+              onAction={onAction}
+              busyId={busyId}
+            />
+          ))
+        )}
       </div>
     </div>
   );
 }
 
 export default function DisplayPage() {
+  const [tickets, setTickets] = React.useState<UiTicket[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+  const [busyId, setBusyId] = React.useState<string | null>(null);
+
+  const loadTickets = React.useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch('/api/sale/kds/tickets', {
+        method: 'GET',
+        cache: 'no-store',
+      });
+
+      const data = (await res.json()) as TicketsResponse;
+
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || 'Failed to load tickets');
+      }
+
+      setTickets(data.tickets ?? []);
+    } catch (err) {
+      console.error('Failed to load KDS tickets', err);
+      setError(err instanceof Error ? err.message : 'Failed to load tickets');
+      setTickets([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    void loadTickets();
+
+    const timer = window.setInterval(() => {
+      void loadTickets();
+    }, 8000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [loadTickets]);
+
+  const grouped = React.useMemo(() => {
+    return {
+      incoming: tickets.filter((ticket) => ticket.status === 'incoming'),
+      fired: tickets.filter((ticket) => ticket.status === 'fired'),
+      complete: tickets.filter((ticket) => ticket.status === 'complete'),
+    };
+  }, [tickets]);
+
+  const handleAction = React.useCallback(
+    async (ticketItemId: string, action: 'start' | 'ready' | 'serve') => {
+      setBusyId(ticketItemId);
+
+      try {
+        const res = await fetch(`/api/sale/kds/items/${ticketItemId}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ action }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || 'Failed to update KDS item');
+        }
+
+        await loadTickets();
+      } catch (err) {
+        console.error('Failed to update KDS item', err);
+        setError(err instanceof Error ? err.message : 'Failed to update KDS item');
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [loadTickets]
+  );
+
   return (
-    <div className="h-screen flex flex-col bg-[#292929]">
-      {/* Main Content - Three Columns */}
-      <div className="flex-1 flex overflow-hidden">
-        <Column
-          title="Incoming"
-          tickets={ticketsData.incoming}
-          type="incoming"
-          count={ticketsData.incoming.length}
-        />
-        <Column
-          title="Fired"
-          tickets={ticketsData.fired}
-          type="fired"
-          count={ticketsData.fired.length}
-        />
-        <Column
-          title="Complete"
-          tickets={ticketsData.complete}
-          type="complete"
-          count={ticketsData.complete.length}
-        />
+    <div className="min-h-screen bg-[#1F1F1F] text-white">
+      <div className="border-b border-white/10 bg-[#292929] px-6 py-4">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="text-2xl font-semibold">Kitchen Display</h1>
+            <p className="text-sm text-white/50 mt-1">
+              Live kitchen tickets and item progress
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <FilterDropdown label="Kitchen" />
+            <FilterDropdown label="Today" icon={<Clock className="h-3 w-3" />} />
+            <button
+              type="button"
+              onClick={() => void loadTickets()}
+              className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/80 hover:bg-white/15"
+            >
+              Refresh
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Count Bar */}
-      <CountBar />
+      {error ? (
+        <div className="px-6 pt-4">
+          <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+            {error}
+          </div>
+        </div>
+      ) : null}
+
+      <div className="p-6">
+        {loading ? (
+          <div className="rounded-2xl border border-white/10 bg-[#2A2A2A] p-8 text-center text-white/50">
+            Loading kitchen tickets...
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+            <Column
+              title="Incoming"
+              tickets={grouped.incoming}
+              column="incoming"
+              onAction={handleAction}
+              busyId={busyId}
+            />
+            <Column
+              title="Fired"
+              tickets={grouped.fired}
+              column="fired"
+              onAction={handleAction}
+              busyId={busyId}
+            />
+            <Column
+              title="Complete"
+              tickets={grouped.complete}
+              column="complete"
+              onAction={handleAction}
+              busyId={busyId}
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }

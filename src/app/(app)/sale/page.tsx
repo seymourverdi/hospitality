@@ -5,35 +5,112 @@
 'use client';
 
 import * as React from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 
-// Context
 import { SaleProvider, useSale } from '@/modules/Sale/context/SaleContext';
 
-// Components
 import { TopBar } from '@/modules/Sale/components/TopBar';
 import { OrderSummaryPanel } from '@/modules/Sale/components/OrderSummaryPanel';
 import { StepperNav } from '@/modules/Sale/components/StepperNav';
 
-// Screens
 import { SelectItemsScreen } from '@/modules/Sale/screens/SelectItemsScreen';
 import { SelectPersonScreen } from '@/modules/Sale/screens/SelectPersonScreen';
 import { SelectTableScreen } from '@/modules/Sale/screens/SelectTableScreen';
 
-// Modals
 import { ModifiersModal } from '@/modules/Sale/modals/ModifiersModal';
 import { CustomNoteModal } from '@/modules/Sale/modals/CustomNoteModal';
 import { ScheduleModal } from '@/modules/Sale/modals/ScheduleModal';
 
-// Constants
 import { KITCHEN_NOTICE } from '@/modules/Sale/constants';
 
-import type { SelectedModifier } from '@/modules/Sale/types';
+import type { SelectedModifier, Product, Table } from '@/modules/Sale/types';
 
-// ============================================
-// SALE PAGE CONTENT (uses context)
-// ============================================
+type HydrateResponse = {
+  ok: boolean;
+  table?: Table;
+  order?: {
+    id: number;
+    status: string;
+    seatNumbers: number[];
+    items: Array<{
+      id: number;
+      qty: number;
+      note: string;
+      modifiers: SelectedModifier[];
+      product: Product;
+    }>;
+  } | null;
+  error?: string;
+};
+
+function SaleHydrator() {
+  const searchParams = useSearchParams();
+  const hydratedKeyRef = React.useRef<string | null>(null);
+
+  const {
+    reset,
+    selectTable,
+    addItem,
+  } = useSale();
+
+  React.useEffect(() => {
+    const tableIdParam = searchParams.get('tableId');
+
+    if (!tableIdParam) {
+      hydratedKeyRef.current = null;
+      return;
+    }
+
+    const tableId = tableIdParam;
+
+    let cancelled = false;
+
+    async function hydrate() {
+      try {
+        const res = await fetch(
+          `/api/sale/orders/by-table?tableId=${encodeURIComponent(tableId)}`,
+          {
+            method: 'GET',
+            cache: 'no-store',
+          }
+        );
+
+        const data = (await res.json()) as HydrateResponse;
+
+        if (!res.ok || !data.ok || !data.table) {
+          throw new Error(data.error || 'Failed to hydrate sale by table');
+        }
+
+        if (cancelled) return;
+
+        reset();
+        selectTable(data.table, data.order?.seatNumbers ?? []);
+
+        if (data.order?.items?.length) {
+          for (const item of data.order.items) {
+            addItem(item.product, item.modifiers ?? [], item.qty);
+          }
+        }
+
+        hydratedKeyRef.current = tableId;
+      } catch (error) {
+        console.error('Failed to hydrate sale page', error);
+      }
+    }
+
+    void hydrate();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams, reset, selectTable, addItem]);
+
+  return null;
+}
 
 function SalePageContent() {
+  const router = useRouter();
+
   const {
     state,
     subtotal,
@@ -42,6 +119,8 @@ function SalePageContent() {
     itemCount,
     currentStepNumber,
     canProceedToNextStep,
+    submissionFeedback,
+    clearSubmissionFeedback,
     setSearchQuery,
     toggleNonMember,
     toggleSkipSeating,
@@ -74,10 +153,23 @@ function SalePageContent() {
     editingItemId,
   } = state;
 
-  // Get the note for the currently editing item
   const editingItem = editingItemId ? items.find((i) => i.id === editingItemId) : null;
 
-  // Handle applying modifiers from modal
+  React.useEffect(() => {
+    if (submissionFeedback.status !== 'success') {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      clearSubmissionFeedback();
+      router.push('/tables');
+    }, 1200);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [submissionFeedback.status, clearSubmissionFeedback, router]);
+
   const handleApplyModifiers = (modifiers: SelectedModifier[]) => {
     if (pendingProduct) {
       addItem(pendingProduct, modifiers);
@@ -85,7 +177,6 @@ function SalePageContent() {
     hideModifierModal();
   };
 
-  // Handle saving note
   const handleSaveNote = (note: string) => {
     if (editingItemId) {
       setItemNote(editingItemId, note);
@@ -93,23 +184,23 @@ function SalePageContent() {
     hideNoteModal();
   };
 
-  // Handle schedule
   const handleSchedule = (time: Date | null) => {
     setScheduledTime(time);
     closeScheduleModal();
   };
 
-  // Render the current step's content
   const renderStepContent = () => {
     switch (step) {
       case 'select-items':
         return <SelectItemsScreen />;
+
       case 'select-person':
         return <SelectPersonScreen />;
+
       case 'select-table':
         return <SelectTableScreen />;
+
       case 'submit':
-        // Final confirmation step
         return (
           <div className="flex-1 flex items-center justify-center bg-sale-bg">
             <div className="text-center">
@@ -123,6 +214,7 @@ function SalePageContent() {
             </div>
           </div>
         );
+
       default:
         return <SelectItemsScreen />;
     }
@@ -130,9 +222,9 @@ function SalePageContent() {
 
   return (
     <div className="h-screen flex bg-sale-bg">
-      {/* Left Side - Top Bar + Step Content + Bottom Stepper */}
+      <SaleHydrator />
+
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Top Bar - Search, Notice, Toggles */}
         <TopBar
           searchValue={searchQuery}
           onSearchChange={setSearchQuery}
@@ -144,12 +236,34 @@ function SalePageContent() {
           kitchenNotice={KITCHEN_NOTICE}
         />
 
-        {/* Step Content */}
+        {submissionFeedback.status !== 'idle' && submissionFeedback.message ? (
+          <div className="px-4 pt-3">
+            <div
+              className={[
+                'rounded-xl px-4 py-3 flex items-center justify-between',
+                submissionFeedback.status === 'success'
+                  ? 'bg-[#4ADE80]/15 border border-[#4ADE80]/30 text-[#86efac]'
+                  : submissionFeedback.status === 'error'
+                    ? 'bg-red-500/15 border border-red-500/30 text-red-300'
+                    : 'bg-white/10 border border-white/10 text-white/70',
+              ].join(' ')}
+            >
+              <span className="text-sm font-medium">{submissionFeedback.message}</span>
+              <button
+                type="button"
+                onClick={clearSubmissionFeedback}
+                className="ml-4 text-xs opacity-80 hover:opacity-100"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        ) : null}
+
         <div className="flex-1 overflow-hidden">
           {renderStepContent()}
         </div>
 
-        {/* Bottom Stepper Navigation - spans full width of main content */}
         <StepperNav
           currentStep={currentStepNumber}
           skipSeating={skipSeating}
@@ -162,7 +276,6 @@ function SalePageContent() {
         />
       </div>
 
-      {/* Right Side - Order Summary Panel (full height) */}
       <OrderSummaryPanel
         items={items}
         selectedMember={selectedMember}
@@ -184,7 +297,6 @@ function SalePageContent() {
         onPrevStep={prevStep}
       />
 
-      {/* Modals */}
       <ModifiersModal
         isOpen={showModifierModal}
         product={pendingProduct}
@@ -208,10 +320,6 @@ function SalePageContent() {
     </div>
   );
 }
-
-// ============================================
-// MAIN PAGE EXPORT (with Provider)
-// ============================================
 
 export default function SalePage() {
   return (
