@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/server/db'
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 function toPositiveInt(value: string | null): number | null {
   const n = Number(value)
   if (!Number.isInteger(n) || n <= 0) {

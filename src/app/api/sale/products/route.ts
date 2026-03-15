@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/server/db'
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 function categoryNameToUiId(name: string | null | undefined) {
   const s = String(name ?? '').trim().toLowerCase()
 
@@ -49,10 +52,7 @@ export async function GET(request: Request) {
           },
         },
       },
-      orderBy: [
-        { categoryId: 'asc' },
-        { name: 'asc' },
-      ],
+      orderBy: [{ categoryId: 'asc' }, { name: 'asc' }],
     })
 
     const products = rows
@@ -86,7 +86,7 @@ export async function GET(request: Request) {
         ok: false,
         error: 'Failed to load sale products',
       },
-      { status: 500 },
+      { status: 500 }
     )
   }
 }
