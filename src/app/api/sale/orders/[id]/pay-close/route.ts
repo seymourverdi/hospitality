@@ -47,15 +47,7 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
-    if (!isAuthorized(request)) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: 'Unauthorized',
-        },
-        { status: 401 }
-      )
-    }
+   
 
     const orderId = toPositiveInt(params.id)
 

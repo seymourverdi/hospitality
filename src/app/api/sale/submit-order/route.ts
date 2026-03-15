@@ -110,15 +110,7 @@ async function getOrCreateOpenShift(locationId: number) {
 
 export async function POST(request: Request) {
   try {
-    if (!isAuthorized(request)) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: 'Unauthorized',
-        },
-        { status: 401 }
-      )
-    }
+  
 
     const body = (await request.json()) as SaleSubmitBody
     const tableId = toPositiveInt(body.tableId)

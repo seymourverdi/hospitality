@@ -162,7 +162,7 @@ export function SidebarNav({ className, user }: SidebarNavProps) {
           <Tooltip>
             <TooltipTrigger asChild>
               <Link
-                href="/admin/users"
+                href="/admin"
                 className={cn(
                   'flex flex-col items-center justify-center gap-1.5 w-[70px] h-[70px] rounded-lg transition-all',
                   pathname.startsWith('/admin')

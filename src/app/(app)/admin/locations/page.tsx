@@ -5,119 +5,78 @@ import * as React from 'react'
 type AdminLocation = {
   id: number
   name: string
-}
-
-type AdminRole = {
-  id: number
-  name: string
-}
-
-type AdminUser = {
-  id: number
-  locationId: number
-  firstName: string
-  lastName: string
-  pinCode: string
-  email: string | null
+  code: string | null
+  timezone: string | null
+  address: string | null
   phone: string | null
-  roleId: number
   isActive: boolean
-  location: AdminLocation
-  role: AdminRole
 }
 
-type UsersResponse = {
-  ok: true
-  users: AdminUser[]
-  locations: AdminLocation[]
-  roles: AdminRole[]
-}
-
-type UserFormState = {
-  locationId: string
-  firstName: string
-  lastName: string
-  pinCode: string
-  email: string
+type LocationFormState = {
+  name: string
+  code: string
+  timezone: string
+  address: string
   phone: string
-  roleId: string
   isActive: boolean
 }
 
-const initialForm: UserFormState = {
-  locationId: '',
-  firstName: '',
-  lastName: '',
-  pinCode: '',
-  email: '',
+const initialForm: LocationFormState = {
+  name: '',
+  code: '',
+  timezone: '',
+  address: '',
   phone: '',
-  roleId: '',
   isActive: true,
 }
 
-export default function AdminUsersPage() {
-  const [users, setUsers] = React.useState<AdminUser[]>([])
-  const [locations, setLocations] = React.useState<AdminLocation[]>([])
-  const [roles, setRoles] = React.useState<AdminRole[]>([])
+export default function AdminLocationsPage() {
+  const [items, setItems] = React.useState<AdminLocation[]>([])
   const [loading, setLoading] = React.useState(true)
   const [saving, setSaving] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [editingId, setEditingId] = React.useState<number | null>(null)
-  const [form, setForm] = React.useState<UserFormState>(initialForm)
+  const [form, setForm] = React.useState<LocationFormState>(initialForm)
 
-  async function loadUsers() {
+  async function loadLocations() {
     try {
       setLoading(true)
       setError(null)
 
-      const res = await fetch('/api/admin/users', { cache: 'no-store' })
-      const data = (await res.json()) as UsersResponse | { ok: false; error: string }
+      const res = await fetch('/api/admin/locations', { cache: 'no-store' })
+      const data = await res.json()
 
       if (!res.ok || !data.ok) {
-        throw new Error('error' in data ? data.error : 'Failed to load users')
+        throw new Error(data.error || 'Failed to load locations')
       }
 
-      setUsers(data.users)
-      setLocations(data.locations)
-      setRoles(data.roles)
-
-      setForm((prev) => ({
-        ...prev,
-        locationId: prev.locationId || String(data.locations[0]?.id ?? ''),
-        roleId: prev.roleId || String(data.roles[0]?.id ?? ''),
-      }))
+      setItems(data.locations)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load users')
+      setError(e instanceof Error ? e.message : 'Failed to load locations')
     } finally {
       setLoading(false)
     }
   }
 
   React.useEffect(() => {
-    void loadUsers()
+    void loadLocations()
   }, [])
 
   function startCreate() {
     setEditingId(null)
-    setForm({
-      ...initialForm,
-      locationId: String(locations[0]?.id ?? ''),
-      roleId: String(roles[0]?.id ?? ''),
-    })
+    setForm(initialForm)
     setError(null)
   }
 
-  function startEdit(user: AdminUser) {
-    setEditingId(user.id)
+  function startEdit(item: AdminLocation) {
+    setEditingId(item.id)
     setForm({
-      locationId: String(user.locationId),
-      firstName: user.firstName,
-      lastName: user.lastName,
-      pinCode: user.pinCode,
-      email: user.email ?? '',
-      phone: user.phone ?? '',
-      roleId: String(user.roleId),
-      isActive: user.isActive,
+      name: item.name ?? '',
+      code: item.code ?? '',
+      timezone: item.timezone ?? '',
+      address: item.address ?? '',
+      phone: item.phone ?? '',
+      isActive: item.isActive,
     })
     setError(null)
   }
@@ -130,18 +89,16 @@ export default function AdminUsersPage() {
       setError(null)
 
       const payload = {
-        locationId: Number(form.locationId),
-        firstName: form.firstName.trim(),
-        lastName: form.lastName.trim(),
-        pinCode: form.pinCode.trim(),
-        email: form.email.trim() || null,
+        name: form.name.trim(),
+        code: form.code.trim() || null,
+        timezone: form.timezone.trim() || null,
+        address: form.address.trim() || null,
         phone: form.phone.trim() || null,
-        roleId: Number(form.roleId),
         isActive: form.isActive,
       }
 
       const res = await fetch(
-        editingId ? `/api/admin/users/${editingId}` : '/api/admin/users',
+        editingId ? `/api/admin/locations/${editingId}` : '/api/admin/locations',
         {
           method: editingId ? 'PATCH' : 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -152,14 +109,14 @@ export default function AdminUsersPage() {
       const data = await res.json()
 
       if (!res.ok || !data.ok) {
-        throw new Error(data.error || 'Failed to save user')
+        throw new Error(data.error || 'Failed to save location')
       }
 
       setEditingId(null)
-      startCreate()
-      await loadUsers()
+      setForm(initialForm)
+      await loadLocations()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to save user')
+      setError(e instanceof Error ? e.message : 'Failed to save location')
     } finally {
       setSaving(false)
     }
@@ -170,9 +127,9 @@ export default function AdminUsersPage() {
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold">Users</h1>
+            <h1 className="text-3xl font-bold">Locations</h1>
             <p className="text-sm text-white/60 mt-1">
-              Create staff users, assign roles and PIN codes
+              Create and manage restaurant locations
             </p>
           </div>
 
@@ -181,7 +138,7 @@ export default function AdminUsersPage() {
             onClick={startCreate}
             className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 transition"
           >
-            New User
+            New Location
           </button>
         </div>
 
@@ -194,63 +151,48 @@ export default function AdminUsersPage() {
         <div className="grid grid-cols-1 xl:grid-cols-[420px,1fr] gap-6">
           <div className="rounded-2xl border border-white/10 bg-neutral-900 p-5">
             <h2 className="text-lg font-semibold mb-4">
-              {editingId ? `Edit User #${editingId}` : 'Create User'}
+              {editingId ? `Edit Location #${editingId}` : 'Create Location'}
             </h2>
 
             <form onSubmit={submitForm} className="space-y-4">
               <div>
-                <label className="block text-sm text-white/70 mb-1">Location</label>
-                <select
-                  value={form.locationId}
-                  onChange={(e) => setForm((prev) => ({ ...prev, locationId: e.target.value }))}
-                  className="w-full h-11 rounded-lg bg-neutral-950 border border-white/10 px-3 outline-none"
-                  required
-                >
-                  {locations.map((location) => (
-                    <option key={location.id} value={location.id}>
-                      {location.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm text-white/70 mb-1">First Name</label>
+                <label className="block text-sm text-white/70 mb-1">Name</label>
                 <input
-                  value={form.firstName}
-                  onChange={(e) => setForm((prev) => ({ ...prev, firstName: e.target.value }))}
+                  value={form.name}
+                  onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
                   className="w-full h-11 rounded-lg bg-neutral-950 border border-white/10 px-3 outline-none"
+                  placeholder="Main Restaurant"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-sm text-white/70 mb-1">Last Name</label>
+                <label className="block text-sm text-white/70 mb-1">Code</label>
                 <input
-                  value={form.lastName}
-                  onChange={(e) => setForm((prev) => ({ ...prev, lastName: e.target.value }))}
+                  value={form.code}
+                  onChange={(e) => setForm((prev) => ({ ...prev, code: e.target.value }))}
                   className="w-full h-11 rounded-lg bg-neutral-950 border border-white/10 px-3 outline-none"
-                  required
+                  placeholder="MAIN"
                 />
               </div>
 
               <div>
-                <label className="block text-sm text-white/70 mb-1">PIN Code</label>
+                <label className="block text-sm text-white/70 mb-1">Timezone</label>
                 <input
-                  value={form.pinCode}
-                  onChange={(e) => setForm((prev) => ({ ...prev, pinCode: e.target.value }))}
+                  value={form.timezone}
+                  onChange={(e) => setForm((prev) => ({ ...prev, timezone: e.target.value }))}
                   className="w-full h-11 rounded-lg bg-neutral-950 border border-white/10 px-3 outline-none"
-                  placeholder="1234"
-                  required
+                  placeholder="Europe/Kiev"
                 />
               </div>
 
               <div>
-                <label className="block text-sm text-white/70 mb-1">Email</label>
+                <label className="block text-sm text-white/70 mb-1">Address</label>
                 <input
-                  value={form.email}
-                  onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
+                  value={form.address}
+                  onChange={(e) => setForm((prev) => ({ ...prev, address: e.target.value }))}
                   className="w-full h-11 rounded-lg bg-neutral-950 border border-white/10 px-3 outline-none"
+                  placeholder="Street, City"
                 />
               </div>
 
@@ -260,23 +202,8 @@ export default function AdminUsersPage() {
                   value={form.phone}
                   onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))}
                   className="w-full h-11 rounded-lg bg-neutral-950 border border-white/10 px-3 outline-none"
+                  placeholder="+380..."
                 />
-              </div>
-
-              <div>
-                <label className="block text-sm text-white/70 mb-1">Role</label>
-                <select
-                  value={form.roleId}
-                  onChange={(e) => setForm((prev) => ({ ...prev, roleId: e.target.value }))}
-                  className="w-full h-11 rounded-lg bg-neutral-950 border border-white/10 px-3 outline-none"
-                  required
-                >
-                  {roles.map((role) => (
-                    <option key={role.id} value={role.id}>
-                      {role.name}
-                    </option>
-                  ))}
-                </select>
               </div>
 
               <label className="flex items-center gap-2 text-sm text-white/80">
@@ -310,10 +237,10 @@ export default function AdminUsersPage() {
 
           <div className="rounded-2xl border border-white/10 bg-neutral-900 overflow-hidden">
             <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between">
-              <h2 className="text-lg font-semibold">User List</h2>
+              <h2 className="text-lg font-semibold">Location List</h2>
               <button
                 type="button"
-                onClick={() => void loadUsers()}
+                onClick={() => void loadLocations()}
                 className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-sm transition"
               >
                 Refresh
@@ -322,8 +249,8 @@ export default function AdminUsersPage() {
 
             {loading ? (
               <div className="p-5 text-sm text-white/60">Loading...</div>
-            ) : users.length === 0 ? (
-              <div className="p-5 text-sm text-white/60">No users yet</div>
+            ) : items.length === 0 ? (
+              <div className="p-5 text-sm text-white/60">No locations yet</div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -331,36 +258,32 @@ export default function AdminUsersPage() {
                     <tr>
                       <th className="text-left px-4 py-3">ID</th>
                       <th className="text-left px-4 py-3">Name</th>
-                      <th className="text-left px-4 py-3">PIN</th>
-                      <th className="text-left px-4 py-3">Location</th>
-                      <th className="text-left px-4 py-3">Role</th>
+                      <th className="text-left px-4 py-3">Code</th>
+                      <th className="text-left px-4 py-3">Timezone</th>
                       <th className="text-left px-4 py-3">Status</th>
                       <th className="text-left px-4 py-3">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {users.map((user) => (
-                      <tr key={user.id} className="border-t border-white/10">
-                        <td className="px-4 py-3">{user.id}</td>
-                        <td className="px-4 py-3">
-                          {user.firstName} {user.lastName}
-                        </td>
-                        <td className="px-4 py-3">{user.pinCode}</td>
-                        <td className="px-4 py-3">{user.location.name}</td>
-                        <td className="px-4 py-3">{user.role.name}</td>
+                    {items.map((item) => (
+                      <tr key={item.id} className="border-t border-white/10">
+                        <td className="px-4 py-3">{item.id}</td>
+                        <td className="px-4 py-3">{item.name}</td>
+                        <td className="px-4 py-3">{item.code ?? '-'}</td>
+                        <td className="px-4 py-3">{item.timezone ?? '-'}</td>
                         <td className="px-4 py-3">
                           <span
                             className={
-                              user.isActive ? 'text-emerald-400' : 'text-red-400'
+                              item.isActive ? 'text-emerald-400' : 'text-red-400'
                             }
                           >
-                            {user.isActive ? 'Active' : 'Inactive'}
+                            {item.isActive ? 'Active' : 'Inactive'}
                           </span>
                         </td>
                         <td className="px-4 py-3">
                           <button
                             type="button"
-                            onClick={() => startEdit(user)}
+                            onClick={() => startEdit(item)}
                             className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 transition"
                           >
                             Edit

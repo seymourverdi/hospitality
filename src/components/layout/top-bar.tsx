@@ -27,6 +27,9 @@ const pageTitles: Record<string, string> = {
   '/settings': 'Settings',
   '/admin': 'Admin',
   '/admin/users': 'User Management',
+  '/admin/locations': 'Location Management',
+  '/admin/tables': 'Area & Table Management',
+  '/admin/menu': 'Menu Management',
 };
 
 interface TopBarProps {

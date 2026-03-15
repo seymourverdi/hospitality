@@ -38,7 +38,7 @@ const moreNavItems = [
   { href: '/filter' as const, label: 'Filter', icon: Filter },
   { href: '/log' as const, label: 'Log', icon: FileText },
   { href: '/settings' as const, label: 'Settings', icon: Settings },
-  { href: '/admin/users' as const, label: 'Admin', icon: Users },
+  { href: '/admin' as const, label: 'Admin', icon: Users },
 ];
 
 interface BottomNavProps {
