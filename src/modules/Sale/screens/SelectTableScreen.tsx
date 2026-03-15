@@ -8,23 +8,11 @@ import { cn } from '@/core/lib/utils';
 import { useSale } from '../context/SaleContext';
 import type { Table, Floor } from '../types';
 
-// Mock floor data - will be replaced with actual data
-const MOCK_FLOORS: Floor[] = [
-  {
-    id: 'dining',
-    name: 'Dining Room',
-    tables: [
-      { id: 'd1', name: 'D1', shape: 'rectangle', x: 50, y: 50, width: 80, height: 40, seats: [], maxSeats: 4, floorId: 'dining' },
-      { id: 'd2', name: 'D2', shape: 'rectangle', x: 150, y: 50, width: 80, height: 40, seats: [], maxSeats: 4, floorId: 'dining' },
-      { id: 'd3', name: 'D3', shape: 'rectangle', x: 250, y: 50, width: 80, height: 40, seats: [], maxSeats: 4, floorId: 'dining' },
-      { id: 'd4', name: 'D4', shape: 'rectangle', x: 350, y: 50, width: 80, height: 40, seats: [], maxSeats: 4, floorId: 'dining' },
-      { id: 'd5', name: 'D5', shape: 'circle', x: 100, y: 150, width: 60, height: 60, seats: [], maxSeats: 6, floorId: 'dining' },
-      { id: 'd6', name: 'D6', shape: 'circle', x: 200, y: 150, width: 60, height: 60, seats: [], maxSeats: 6, floorId: 'dining' },
-      { id: 'd7', name: 'D7', shape: 'circle', x: 300, y: 150, width: 60, height: 60, seats: [], maxSeats: 6, floorId: 'dining' },
-      { id: 'ct', name: 'CT', shape: 'rectangle', x: 150, y: 250, width: 160, height: 60, seats: [], maxSeats: 10, floorId: 'dining' },
-    ],
-  },
-];
+type FloorResponse = {
+  ok: boolean;
+  floors?: Floor[];
+  error?: string;
+};
 
 interface TableIconProps {
   table: Table;
@@ -66,13 +54,19 @@ interface SeatSelectorProps {
   className?: string;
 }
 
-function SeatSelector({ maxSeats, selectedSeats, onSeatToggle, className }: SeatSelectorProps) {
+function SeatSelector({
+  maxSeats,
+  selectedSeats,
+  onSeatToggle,
+  className,
+}: SeatSelectorProps) {
   return (
     <div className={cn('', className)}>
       <p className="text-white/60 text-sm mb-3">Select Seat(s):</p>
       <div className="flex flex-wrap gap-2">
         {Array.from({ length: maxSeats }, (_, i) => i + 1).map((seatNum) => {
           const isSelected = selectedSeats.includes(seatNum);
+
           return (
             <button
               key={seatNum}
@@ -80,7 +74,7 @@ function SeatSelector({ maxSeats, selectedSeats, onSeatToggle, className }: Seat
               className={cn(
                 'w-10 h-10 rounded-lg flex items-center justify-center',
                 'text-sm font-medium transition-all',
-                'min-w-[40px] min-h-[40px]', // Touch target
+                'min-w-[40px] min-h-[40px]',
                 isSelected
                   ? 'bg-primary text-black'
                   : 'bg-sale-card text-white hover:bg-[#444]'
@@ -103,20 +97,70 @@ export function SelectTableScreen({ className }: SelectTableScreenProps) {
   const { state, selectTable } = useSale();
   const { selectedTable, selectedSeats } = state;
 
-  const [activeFloor, setActiveFloor] = React.useState<Floor>(MOCK_FLOORS[0]!);
+  const [floors, setFloors] = React.useState<Floor[]>([]);
+  const [activeFloorId, setActiveFloorId] = React.useState<string | null>(null);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
 
-  // Handle table selection
+  const activeFloor = React.useMemo(() => {
+    if (!activeFloorId) return null;
+    return floors.find((floor) => floor.id === activeFloorId) ?? null;
+  }, [floors, activeFloorId]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    async function loadFloors() {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const res = await fetch('/api/sale/tables', {
+          method: 'GET',
+          cache: 'no-store',
+        });
+
+        const data = (await res.json()) as FloorResponse;
+
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || 'Failed to load tables');
+        }
+
+        const nextFloors = data.floors ?? [];
+
+        if (!cancelled) {
+          setFloors(nextFloors);
+          setActiveFloorId(nextFloors[0]?.id ?? null);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.error('Failed to load sale tables', err);
+          setError(err instanceof Error ? err.message : 'Failed to load tables');
+          setFloors([]);
+          setActiveFloorId(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadFloors();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const handleTableSelect = (table: Table) => {
     if (selectedTable?.id === table.id) {
-      // If same table, keep selected seats
       selectTable(table, selectedSeats);
     } else {
-      // New table, reset seats
       selectTable(table, []);
     }
   };
 
-  // Handle seat toggle
   const handleSeatToggle = (seatNum: number) => {
     if (!selectedTable) return;
 
@@ -129,15 +173,14 @@ export function SelectTableScreen({ className }: SelectTableScreenProps) {
 
   return (
     <div className={cn('flex-1 flex flex-col bg-sale-bg p-4', className)}>
-      {/* Floor Tabs */}
-      <div className="flex gap-2 mb-4">
-        {MOCK_FLOORS.map((floor) => (
+      <div className="flex gap-2 mb-4 flex-wrap">
+        {floors.map((floor) => (
           <button
             key={floor.id}
-            onClick={() => setActiveFloor(floor)}
+            onClick={() => setActiveFloorId(floor.id)}
             className={cn(
               'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
-              activeFloor.id === floor.id
+              activeFloor?.id === floor.id
                 ? 'bg-primary text-black'
                 : 'bg-sale-card text-white hover:bg-[#444]'
             )}
@@ -147,26 +190,33 @@ export function SelectTableScreen({ className }: SelectTableScreenProps) {
         ))}
       </div>
 
-      {/* Floor Plan */}
       <div className="flex-1 relative bg-sale-panel rounded-xl overflow-hidden min-h-[300px]">
-        {activeFloor.tables.map((table) => (
-          <TableIcon
-            key={table.id}
-            table={table}
-            isSelected={selectedTable?.id === table.id}
-            onSelect={handleTableSelect}
-          />
-        ))}
-
-        {/* Empty state overlay if no tables */}
-        {activeFloor.tables.length === 0 && (
+        {loading ? (
           <div className="absolute inset-0 flex items-center justify-center">
-            <p className="text-white/40 text-sm">No tables configured for this floor</p>
+            <p className="text-white/40 text-sm">Loading tables...</p>
+          </div>
+        ) : error ? (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <p className="text-red-400 text-sm">{error}</p>
+          </div>
+        ) : activeFloor?.tables?.length ? (
+          activeFloor.tables.map((table) => (
+            <TableIcon
+              key={table.id}
+              table={table}
+              isSelected={selectedTable?.id === table.id}
+              onSelect={handleTableSelect}
+            />
+          ))
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <p className="text-white/40 text-sm">
+              No tables configured for this floor
+            </p>
           </div>
         )}
       </div>
 
-      {/* Seat Selection (shown when table is selected) */}
       {selectedTable && (
         <div className="mt-4 p-4 bg-sale-panel rounded-xl">
           <div className="flex items-center justify-between mb-3">
@@ -178,12 +228,14 @@ export function SelectTableScreen({ className }: SelectTableScreenProps) {
                 {selectedTable.maxSeats} seats available
               </p>
             </div>
+
             {selectedSeats.length > 0 && (
               <span className="px-3 py-1 rounded-lg bg-primary/20 text-primary text-sm">
                 {selectedSeats.length} seat{selectedSeats.length !== 1 ? 's' : ''} selected
               </span>
             )}
           </div>
+
           <SeatSelector
             maxSeats={selectedTable.maxSeats}
             selectedSeats={selectedSeats}
@@ -192,8 +244,7 @@ export function SelectTableScreen({ className }: SelectTableScreenProps) {
         </div>
       )}
 
-      {/* Instructions when no table selected */}
-      {!selectedTable && (
+      {!selectedTable && !loading && !error && (
         <div className="mt-4 p-4 bg-sale-panel rounded-xl text-center">
           <p className="text-white/40 text-sm">
             Tap a table on the floor plan to select it

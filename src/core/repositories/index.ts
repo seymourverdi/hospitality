@@ -1,4 +1,3 @@
-// src/core/repositories/index.ts
 import type { Repositories, RepositoryConfig } from "./types";
 import { MockProductRepository, MockMemberRepository, MockOrderRepository } from "./mock";
 
@@ -10,26 +9,26 @@ import { ApiOrderRepository } from "./api/OrderRepository";
 export * from "./types";
 
 export function createRepositories(config?: RepositoryConfig): Repositories {
-  const useOptix = config?.useOptix ?? false;
+  const useApi = config?.useOptix ?? (process.env.NEXT_PUBLIC_SALE_USE_API !== "0");
 
-  if (useOptix) {
-    const api = new ApiClient({
-      baseUrl: "",
-      getToken: () => {      
-        return null;
-      },
-    });
-
+  if (!useApi) {
     return {
-      products: new ApiProductRepository(api),
-      members: new ApiMemberRepository(api),
-      orders: new ApiOrderRepository(api),
+      products: new MockProductRepository(),
+      members: new MockMemberRepository(),
+      orders: new MockOrderRepository(),
     };
   }
 
+  const api = new ApiClient({
+    baseUrl: "",
+    getToken: () => {
+      return null;
+    },
+  });
+
   return {
-    products: new MockProductRepository(),
-    members: new MockMemberRepository(),
-    orders: new MockOrderRepository(),
+    products: new ApiProductRepository(api),
+    members: new ApiMemberRepository(api),
+    orders: new ApiOrderRepository(api),
   };
 }

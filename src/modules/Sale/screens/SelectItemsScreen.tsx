@@ -1,18 +1,21 @@
-// City Club HMS - Select Items Screen (Step 1)
-// Categories + Product Grid view - matching Figma layout exactly
+'use client'
 
-'use client';
-
-import * as React from 'react';
-import { cn } from '@/core/lib/utils';
-import { CategoryGrid } from '../components/CategoryTile';
-import { ProductGrid } from '../components/ProductCard';
-import { CATEGORIES, getProductsByCategory, searchProducts } from '../constants';
-import { useSale } from '../context/SaleContext';
-import type { Product } from '../types';
+import * as React from 'react'
+import { cn } from '@/core/lib/utils'
+import { CategoryGrid } from '../components/CategoryTile'
+import { ProductGrid } from '../components/ProductCard'
+import { CATEGORIES } from '../constants'
+import { useSale } from '../context/SaleContext'
+import type { Product } from '../types'
 
 interface SelectItemsScreenProps {
-  className?: string;
+  className?: string
+}
+
+type ProductsResponse = {
+  ok: boolean
+  products?: Product[]
+  error?: string
 }
 
 export function SelectItemsScreen({ className }: SelectItemsScreenProps) {
@@ -21,43 +24,79 @@ export function SelectItemsScreen({ className }: SelectItemsScreenProps) {
     setActiveCategory,
     addItem,
     showModifierModal,
-  } = useSale();
+  } = useSale()
 
-  const { activeCategory, searchQuery } = state;
+  const { activeCategory, searchQuery } = state
 
-  // Get filtered products based on category and search
-  const products = React.useMemo(() => {
-    let filtered = getProductsByCategory(activeCategory);
+  const [products, setProducts] = React.useState<Product[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [error, setError] = React.useState<string | null>(null)
 
-    if (searchQuery.trim()) {
-      // If searching, search across all products
-      filtered = searchProducts(searchQuery);
+  React.useEffect(() => {
+    let cancelled = false
+
+    async function loadProducts() {
+      setLoading(true)
+      setError(null)
+
+      try {
+        const qs = new URLSearchParams()
+
+        if (activeCategory && activeCategory !== 'all') {
+          qs.set('category', activeCategory)
+        }
+
+        if (searchQuery.trim()) {
+          qs.set('search', searchQuery.trim())
+        }
+
+        const url = `/api/sale/products${qs.toString() ? `?${qs.toString()}` : ''}`
+        const res = await fetch(url, { method: 'GET' })
+        const data = (await res.json()) as ProductsResponse
+
+        if (!res.ok || !data.ok) {
+          throw new Error(data.error || 'Failed to load products')
+        }
+
+        if (!cancelled) {
+          setProducts(data.products ?? [])
+        }
+      } catch (err) {
+        if (!cancelled) {
+          const message = err instanceof Error ? err.message : 'Failed to load products'
+          setError(message)
+          setProducts([])
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false)
+        }
+      }
     }
 
-    return filtered;
-  }, [activeCategory, searchQuery]);
+    void loadProducts()
 
-  // Handle adding a product
+    return () => {
+      cancelled = true
+    }
+  }, [activeCategory, searchQuery])
+
   const handleAddProduct = (product: Product) => {
-    // If product has required modifiers, show modal
     if (product.hasRequiredModifiers || (product.modifierGroups && product.modifierGroups.length > 0)) {
-      showModifierModal(product);
+      showModifierModal(product)
     } else {
-      // Add directly to order
-      addItem(product);
+      addItem(product)
     }
-  };
+  }
 
-  // Handle clicking on product card (to view modifiers)
   const handleProductClick = (product: Product) => {
-    if (product.modifierGroups && product.modifierGroups.length > 0) {
-      showModifierModal(product);
+    if (product.hasRequiredModifiers || (product.modifierGroups && product.modifierGroups.length > 0)) {
+      showModifierModal(product)
     }
-  };
+  }
 
   return (
     <div className={cn('flex-1 flex flex-col overflow-hidden bg-[#292929]', className)}>
-      {/* Category Grid - 2 rows x 5 columns, matching Figma: 1216x361, gap 15px */}
       <div className="px-[15px] pt-[10px]">
         <CategoryGrid
           categories={CATEGORIES}
@@ -66,12 +105,18 @@ export function SelectItemsScreen({ className }: SelectItemsScreenProps) {
         />
       </div>
 
-      {/* Divider line */}
       <div className="mx-[15px] my-[15px] h-px bg-white/10" />
 
-      {/* Product Grid - scrollable area with 15px padding */}
       <div className="flex-1 overflow-y-auto px-[15px] pb-[15px]">
-        {products.length > 0 ? (
+        {loading ? (
+          <div className="flex flex-col items-center justify-center h-64 text-center">
+            <p className="text-white/40 text-sm">Loading products...</p>
+          </div>
+        ) : error ? (
+          <div className="flex flex-col items-center justify-center h-64 text-center">
+            <p className="text-red-400 text-sm">{error}</p>
+          </div>
+        ) : products.length > 0 ? (
           <ProductGrid
             products={products}
             onAddProduct={handleAddProduct}
@@ -87,5 +132,5 @@ export function SelectItemsScreen({ className }: SelectItemsScreenProps) {
         )}
       </div>
     </div>
-  );
+  )
 }

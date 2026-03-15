@@ -1,435 +1,952 @@
-import { PrismaClient, DeviceType } from "@prisma/client";
+import 'dotenv/config'
+import { Pool } from 'pg'
+import { PrismaPg } from '@prisma/adapter-pg'
+import {
+  DeviceType,
+  KdsStatus,
+  KitchenTicketStatus,
+  MembershipLevel,
+  ModifierGroup,
+  OrderItemStatus,
+  OrderStatus,
+  OrderType,
+  PaymentMethod,
+  PaymentStatus,
+  PrismaClient,
+  ReservationSource,
+  ReservationStatus,
+  ShiftStatus,
+} from '@prisma/client'
 
-const prisma = new PrismaClient();
+const connectionString = process.env.DATABASE_URL
 
-function money(n: number) {
-  // Prisma Decimal понимает string/number, но string надёжнее
-  return n.toFixed(2);
+if (!connectionString) {
+  throw new Error('DATABASE_URL is not set')
 }
 
-async function getOrCreateLocation() {
-  const code = process.env.SEED_LOCATION_CODE || "MAIN";
-  const name = process.env.SEED_LOCATION_NAME || "Demo Restaurant";
-  const timezone = process.env.SEED_LOCATION_TZ || "Europe/Kiev";
+const pool = new Pool({
+  connectionString,
+})
 
-  const existing = await prisma.restaurantLocation.findFirst({
-    where: { code },
-  });
+const adapter = new PrismaPg(pool)
 
-  if (existing) return existing;
+const prisma = new PrismaClient({
+  adapter,
+  log: ['error', 'warn'],
+})
 
-  return prisma.restaurantLocation.create({
-    data: {
-      code,
-      name,
-      timezone,
-      isActive: true,
-    },
-  });
+async function resetDatabase() {
+  await prisma.paymentRefund.deleteMany()
+  await prisma.apiIdempotency.deleteMany()
+  await prisma.kitchenTicketItem.deleteMany()
+  await prisma.kitchenTicket.deleteMany()
+  await prisma.session.deleteMany()
+  await prisma.savedFilter.deleteMany()
+  await prisma.displayLayout.deleteMany()
+  await prisma.reportSnapshot.deleteMany()
+  await prisma.payment.deleteMany()
+  await prisma.orderItemModifier.deleteMany()
+  await prisma.orderItem.deleteMany()
+  await prisma.order.deleteMany()
+  await prisma.menuItemModifierGroup.deleteMany()
+  await prisma.modifierOption.deleteMany()
+  await prisma.modifierGroup.deleteMany()
+  await prisma.menuItem.deleteMany()
+  await prisma.menuCategory.deleteMany()
+  await prisma.reservationTable.deleteMany()
+  await prisma.reservation.deleteMany()
+  await prisma.membership.deleteMany()
+  await prisma.guest.deleteMany()
+  await prisma.table.deleteMany()
+  await prisma.area.deleteMany()
+  await prisma.shift.deleteMany()
+  await prisma.user.deleteMany()
+  await prisma.role.deleteMany()
+  await prisma.terminal.deleteMany()
+  await prisma.kDSStation.deleteMany()
+  await prisma.restaurantLocation.deleteMany()
 }
-
-async function seedKdsStations(locationId: number) {
-  const stations = [
-    { code: "KITCHEN", name: "Kitchen", sortOrder: 1 },
-    { code: "BAR", name: "Bar", sortOrder: 2 },
-    { code: "DESSERT", name: "Dessert", sortOrder: 3 },
-  ];
-
-  const out: Record<string, { id: number }> = {};
-
-  for (const s of stations) {
-    const existing = await prisma.kDSStation.findFirst({
-      where: { locationId, code: s.code },
-      select: { id: true },
-    });
-
-    const row =
-      existing ??
-      (await prisma.kDSStation.create({
-        data: {
-          locationId,
-          code: s.code,
-          name: s.name,
-          sortOrder: s.sortOrder,
-          isActive: true,
-        },
-        select: { id: true },
-      }));
-
-    out[s.code] = row;
-  }
-
-  return out;
-}
-
-async function seedTerminal(locationId: number, kdsStationId: number | null) {
-  const name = process.env.SEED_TERMINAL_NAME || "Main POS";
-  const existing = await prisma.terminal.findFirst({
-    where: { locationId, name },
-    select: { id: true },
-  });
-
-  if (existing) return existing;
-
-  return prisma.terminal.create({
-    data: {
-      locationId,
-      name,
-      deviceType: DeviceType.POS,
-      isActive: true,
-      kdsStationId: kdsStationId ?? undefined,
-    },
-    select: { id: true },
-  });
-}
-
-type CategorySeed = { key: string; name: string; sortOrder: number };
-type ItemSeed = {
-  key: string;
-  categoryKey: string;
-  name: string;
-  sku?: string;
-  basePrice: number;
-  isAlcohol?: boolean;
-  kdsStationCode?: "KITCHEN" | "BAR" | "DESSERT";
-};
-
-type ModifierGroupSeed = {
-  key: string;
-  name: string;
-  minSelected?: number | null;
-  maxSelected?: number | null;
-  isRequired?: boolean;
-  sortOrder?: number;
-  options: Array<{ key: string; name: string; priceDelta?: number }>;
-};
-
-type ItemGroupMapSeed = { itemKey: string; groupKey: string };
 
 async function main() {
-  const reset = (process.env.SEED_RESET || "").toLowerCase() === "true";
+  await resetDatabase()
 
-  const location = await getOrCreateLocation();
-  const kds = await seedKdsStations(location.id);
+  const adminRole = await prisma.role.create({
+    data: {
+      name: 'admin',
+      permissionsJson: {
+        all: true,
+      },
+    },
+  })
 
-  // Опциональный терминал под будущие тесты/заказы
-  await seedTerminal(location.id, null);
+  const managerRole = await prisma.role.create({
+    data: {
+      name: 'manager',
+      permissionsJson: {
+        reports: true,
+        discounts: true,
+        voids: true,
+        shiftControl: true,
+      },
+    },
+  })
 
-  if (reset) {
-    // ВНИМАНИЕ: удаляем только menu-сущности и их привязки для конкретной локации.
-    // Не трогаем заказы/платежи/пользователей и т.п.
-    await prisma.$transaction([
-      prisma.orderItemModifier.deleteMany({
-        where: { orderItem: { order: { locationId: location.id } } },
-      }),
-      prisma.menuItemModifierGroup.deleteMany({
-        where: { menuItem: { locationId: location.id } },
-      }),
-      prisma.orderItem.deleteMany({
-        where: { order: { locationId: location.id } },
-      }),
-      prisma.order.deleteMany({ where: { locationId: location.id } }),
+  const cashierRole = await prisma.role.create({
+    data: {
+      name: 'cashier',
+      permissionsJson: {
+        pos: true,
+        payments: true,
+        openOrders: true,
+      },
+    },
+  })
 
-      prisma.modifierOption.deleteMany({
-        where: { modifierGroup: { locationId: location.id } },
-      }),
-      prisma.modifierGroup.deleteMany({ where: { locationId: location.id } }),
-      prisma.menuItem.deleteMany({ where: { locationId: location.id } }),
-      prisma.menuCategory.deleteMany({ where: { locationId: location.id } }),
-    ]);
-  }
+  const waiterRole = await prisma.role.create({
+    data: {
+      name: 'waiter',
+      permissionsJson: {
+        pos: true,
+        tables: true,
+        sendToKitchen: true,
+      },
+    },
+  })
 
-  const categories: CategorySeed[] = [
-    { key: "starters", name: "Starters", sortOrder: 1 },
-    { key: "mains", name: "Mains", sortOrder: 2 },
-    { key: "drinks", name: "Drinks", sortOrder: 3 },
-    { key: "desserts", name: "Desserts", sortOrder: 4 },
-  ];
+  const location = await prisma.restaurantLocation.create({
+    data: {
+      name: 'Demo Hospitality',
+      code: 'DEMO',
+      timezone: 'Europe/Kiev',
+      address: 'Demo Street 1',
+      phone: '+380000000000',
+      isActive: true,
+    },
+  })
 
-  const items: ItemSeed[] = [
-    { key: "fries", categoryKey: "starters", name: "French Fries", sku: "ST-001", basePrice: 3.5, kdsStationCode: "KITCHEN" },
-    { key: "wings", categoryKey: "starters", name: "Chicken Wings", sku: "ST-002", basePrice: 6.9, kdsStationCode: "KITCHEN" },
+  const hotKitchen = await prisma.kDSStation.create({
+    data: {
+      locationId: location.id,
+      name: 'Hot Kitchen',
+      code: 'HOT',
+      sortOrder: 1,
+      isActive: true,
+    },
+  })
 
-    { key: "burger", categoryKey: "mains", name: "Classic Burger", sku: "MN-001", basePrice: 10.9, kdsStationCode: "KITCHEN" },
-    { key: "pizza", categoryKey: "mains", name: "Margherita Pizza", sku: "MN-002", basePrice: 11.5, kdsStationCode: "KITCHEN" },
+  const barStation = await prisma.kDSStation.create({
+    data: {
+      locationId: location.id,
+      name: 'Bar',
+      code: 'BAR',
+      sortOrder: 2,
+      isActive: true,
+    },
+  })
 
-    { key: "cola", categoryKey: "drinks", name: "Cola", sku: "DR-001", basePrice: 2.8, kdsStationCode: "BAR" },
-    { key: "beer", categoryKey: "drinks", name: "Lager Beer", sku: "DR-002", basePrice: 4.5, isAlcohol: true, kdsStationCode: "BAR" },
-    { key: "latte", categoryKey: "drinks", name: "Latte", sku: "DR-003", basePrice: 3.9, kdsStationCode: "BAR" },
+  const frontPos = await prisma.terminal.create({
+    data: {
+      locationId: location.id,
+      name: 'Front POS',
+      code: 'POS-1',
+      deviceType: DeviceType.POS,
+      kdsStationId: hotKitchen.id,
+      isActive: true,
+    },
+  })
 
-    { key: "cheesecake", categoryKey: "desserts", name: "Cheesecake", sku: "DS-001", basePrice: 5.2, kdsStationCode: "DESSERT" },
-  ];
+  const barTerminal = await prisma.terminal.create({
+    data: {
+      locationId: location.id,
+      name: 'Bar POS',
+      code: 'BAR-1',
+      deviceType: DeviceType.BAR,
+      kdsStationId: barStation.id,
+      isActive: true,
+    },
+  })
 
-  const modifierGroups: ModifierGroupSeed[] = [
-    {
-      key: "burger_cook",
-      name: "Cooking Preference",
+  const kdsTerminal = await prisma.terminal.create({
+    data: {
+      locationId: location.id,
+      name: 'Kitchen Screen',
+      code: 'KDS-1',
+      deviceType: DeviceType.KDS,
+      kdsStationId: hotKitchen.id,
+      isActive: true,
+    },
+  })
+
+  const mainHall = await prisma.area.create({
+    data: {
+      locationId: location.id,
+      name: 'Main Hall',
+      sortOrder: 1,
+      isActive: true,
+    },
+  })
+
+  const patio = await prisma.area.create({
+    data: {
+      locationId: location.id,
+      name: 'Patio',
+      sortOrder: 2,
+      isActive: true,
+    },
+  })
+
+  const t1 = await prisma.table.create({
+    data: {
+      locationId: location.id,
+      areaId: mainHall.id,
+      name: 'T1',
+      capacity: 4,
+      status: 'free',
+      isActive: true,
+    },
+  })
+
+  const t2 = await prisma.table.create({
+    data: {
+      locationId: location.id,
+      areaId: mainHall.id,
+      name: 'T2',
+      capacity: 4,
+      status: 'free',
+      isActive: true,
+    },
+  })
+
+  const t3 = await prisma.table.create({
+    data: {
+      locationId: location.id,
+      areaId: mainHall.id,
+      name: 'T3',
+      capacity: 2,
+      status: 'free',
+      isActive: true,
+    },
+  })
+
+  const t4 = await prisma.table.create({
+    data: {
+      locationId: location.id,
+      areaId: mainHall.id,
+      name: 'T4',
+      capacity: 2,
+      status: 'free',
+      isActive: true,
+    },
+  })
+
+  const p1 = await prisma.table.create({
+    data: {
+      locationId: location.id,
+      areaId: patio.id,
+      name: 'P1',
+      capacity: 4,
+      status: 'free',
+      isActive: true,
+    },
+  })
+
+  const p2 = await prisma.table.create({
+    data: {
+      locationId: location.id,
+      areaId: patio.id,
+      name: 'P2',
+      capacity: 6,
+      status: 'free',
+      isActive: true,
+    },
+  })
+
+  const adminUser = await prisma.user.create({
+    data: {
+      locationId: location.id,
+      firstName: 'System',
+      lastName: 'Admin',
+      pinCode: '1111',
+      email: 'admin@example.com',
+      roleId: adminRole.id,
+      isActive: true,
+    },
+  })
+
+  const cashierUser = await prisma.user.create({
+    data: {
+      locationId: location.id,
+      firstName: 'John',
+      lastName: 'Cashier',
+      pinCode: '2222',
+      email: 'cashier@example.com',
+      roleId: cashierRole.id,
+      isActive: true,
+    },
+  })
+
+  const waiterUser = await prisma.user.create({
+    data: {
+      locationId: location.id,
+      firstName: 'Anna',
+      lastName: 'Waiter',
+      pinCode: '3333',
+      email: 'waiter@example.com',
+      roleId: waiterRole.id,
+      isActive: true,
+    },
+  })
+
+  const managerUser = await prisma.user.create({
+    data: {
+      locationId: location.id,
+      firstName: 'Kate',
+      lastName: 'Manager',
+      pinCode: '4444',
+      email: 'manager@example.com',
+      roleId: managerRole.id,
+      isActive: true,
+    },
+  })
+
+  const guest = await prisma.guest.create({
+    data: {
+      locationId: location.id,
+      firstName: 'Michael',
+      lastName: 'Stone',
+      phone: '+380501112233',
+      email: 'guest@example.com',
+      note: 'Prefers window seating',
+    },
+  })
+
+  const membership = await prisma.membership.create({
+    data: {
+      guestId: guest.id,
+      membershipLevel: MembershipLevel.GOLD,
+      membershipNumber: 'GOLD-0001',
+      discountPercent: '10.00',
+      isActive: true,
+    },
+  })
+
+  await prisma.reservation.create({
+    data: {
+      locationId: location.id,
+      guestId: guest.id,
+      reservationTime: new Date(Date.now() + 2 * 60 * 60 * 1000),
+      partySize: 4,
+      status: ReservationStatus.CONFIRMED,
+      source: ReservationSource.PHONE,
+      note: 'Birthday dinner',
+      tables: {
+        create: [
+          {
+            tableId: t2.id,
+          },
+        ],
+      },
+    },
+  })
+
+  const burgersCategory = await prisma.menuCategory.create({
+    data: {
+      locationId: location.id,
+      name: 'Burgers',
+      slug: 'burgers',
+      description: 'Burgers and sandwiches',
+      sortOrder: 1,
+      isActive: true,
+    },
+  })
+
+  const pizzaCategory = await prisma.menuCategory.create({
+    data: {
+      locationId: location.id,
+      name: 'Pizza',
+      slug: 'pizza',
+      description: 'Stone baked pizza',
+      sortOrder: 2,
+      isActive: true,
+    },
+  })
+
+  const drinksCategory = await prisma.menuCategory.create({
+    data: {
+      locationId: location.id,
+      name: 'Drinks',
+      slug: 'drinks',
+      description: 'Soft drinks and bar',
+      sortOrder: 3,
+      isActive: true,
+    },
+  })
+
+  const sidesCategory = await prisma.menuCategory.create({
+    data: {
+      locationId: location.id,
+      name: 'Sides',
+      slug: 'sides',
+      description: 'Snacks and sides',
+      sortOrder: 4,
+      isActive: true,
+    },
+  })
+
+  const classicBurger = await prisma.menuItem.create({
+    data: {
+      locationId: location.id,
+      categoryId: burgersCategory.id,
+      name: 'Classic Burger',
+      sku: 'BURGER-CLASSIC',
+      description: 'Beef patty, lettuce, tomato, pickles',
+      basePrice: '12.50',
+      taxRate: '20.00',
+      isAlcohol: false,
+      isActive: true,
+      kdsStationId: hotKitchen.id,
+    },
+  })
+
+  const cheeseburger = await prisma.menuItem.create({
+    data: {
+      locationId: location.id,
+      categoryId: burgersCategory.id,
+      name: 'Cheeseburger',
+      sku: 'BURGER-CHEESE',
+      description: 'Beef patty with cheddar cheese',
+      basePrice: '13.50',
+      taxRate: '20.00',
+      isAlcohol: false,
+      isActive: true,
+      kdsStationId: hotKitchen.id,
+    },
+  })
+
+  const margherita = await prisma.menuItem.create({
+    data: {
+      locationId: location.id,
+      categoryId: pizzaCategory.id,
+      name: 'Margherita Pizza',
+      sku: 'PIZZA-MARG',
+      description: 'Tomato, mozzarella, basil',
+      basePrice: '14.00',
+      taxRate: '20.00',
+      isAlcohol: false,
+      isActive: true,
+      kdsStationId: hotKitchen.id,
+    },
+  })
+
+  const pepperoni = await prisma.menuItem.create({
+    data: {
+      locationId: location.id,
+      categoryId: pizzaCategory.id,
+      name: 'Pepperoni Pizza',
+      sku: 'PIZZA-PEPP',
+      description: 'Tomato, mozzarella, pepperoni',
+      basePrice: '16.00',
+      taxRate: '20.00',
+      isAlcohol: false,
+      isActive: true,
+      kdsStationId: hotKitchen.id,
+    },
+  })
+
+  const fries = await prisma.menuItem.create({
+    data: {
+      locationId: location.id,
+      categoryId: sidesCategory.id,
+      name: 'French Fries',
+      sku: 'SIDE-FRIES',
+      description: 'Crispy fries',
+      basePrice: '5.50',
+      taxRate: '20.00',
+      isAlcohol: false,
+      isActive: true,
+      kdsStationId: hotKitchen.id,
+    },
+  })
+
+  const caesarSalad = await prisma.menuItem.create({
+    data: {
+      locationId: location.id,
+      categoryId: sidesCategory.id,
+      name: 'Caesar Salad',
+      sku: 'SALAD-CAESAR',
+      description: 'Romaine, parmesan, croutons',
+      basePrice: '9.00',
+      taxRate: '20.00',
+      isAlcohol: false,
+      isActive: true,
+      kdsStationId: hotKitchen.id,
+    },
+  })
+
+  const cola = await prisma.menuItem.create({
+    data: {
+      locationId: location.id,
+      categoryId: drinksCategory.id,
+      name: 'Cola',
+      sku: 'DRINK-COLA',
+      description: '330ml bottle',
+      basePrice: '3.50',
+      taxRate: '20.00',
+      isAlcohol: false,
+      isActive: true,
+      kdsStationId: barStation.id,
+    },
+  })
+
+  const orangeJuice = await prisma.menuItem.create({
+    data: {
+      locationId: location.id,
+      categoryId: drinksCategory.id,
+      name: 'Orange Juice',
+      sku: 'DRINK-OJ',
+      description: 'Fresh orange juice',
+      basePrice: '4.50',
+      taxRate: '20.00',
+      isAlcohol: false,
+      isActive: true,
+      kdsStationId: barStation.id,
+    },
+  })
+
+  const beer = await prisma.menuItem.create({
+    data: {
+      locationId: location.id,
+      categoryId: drinksCategory.id,
+      name: 'Draft Beer',
+      sku: 'DRINK-BEER',
+      description: 'House lager 0.5L',
+      basePrice: '5.00',
+      taxRate: '20.00',
+      isAlcohol: true,
+      isActive: true,
+      kdsStationId: barStation.id,
+    },
+  })
+
+  const burgerAddons = await prisma.modifierGroup.create({
+    data: {
+      locationId: location.id,
+      name: 'Burger Add-ons',
+      minSelected: 0,
+      maxSelected: 3,
+      isRequired: false,
+      sortOrder: 1,
+      isActive: true,
+    },
+  })
+
+  const burgerCooking = await prisma.modifierGroup.create({
+    data: {
+      locationId: location.id,
+      name: 'Burger Cooking',
       minSelected: 1,
       maxSelected: 1,
       isRequired: true,
-      sortOrder: 1,
-      options: [
-        { key: "rare", name: "Rare" },
-        { key: "medium", name: "Medium" },
-        { key: "welldone", name: "Well-done" },
-      ],
-    },
-    {
-      key: "burger_addons",
-      name: "Add-ons",
-      minSelected: 0,
-      maxSelected: 5,
-      isRequired: false,
       sortOrder: 2,
-      options: [
-        { key: "extra_cheese", name: "Extra cheese", priceDelta: 1.0 },
-        { key: "bacon", name: "Bacon", priceDelta: 1.5 },
-        { key: "jalapeno", name: "Jalapeño", priceDelta: 0.7 },
-      ],
+      isActive: true,
     },
-    {
-      key: "sauce_choice",
-      name: "Sauce Choice",
+  })
+
+  const pizzaExtras = await prisma.modifierGroup.create({
+    data: {
+      locationId: location.id,
+      name: 'Pizza Extras',
       minSelected: 0,
-      maxSelected: 2,
+      maxSelected: 3,
       isRequired: false,
       sortOrder: 3,
-      options: [
-        { key: "bbq", name: "BBQ" },
-        { key: "mayo", name: "Mayo" },
-        { key: "ketchup", name: "Ketchup" },
-        { key: "spicy", name: "Spicy sauce", priceDelta: 0.3 },
-      ],
+      isActive: true,
     },
-    {
-      key: "pizza_size",
-      name: "Pizza Size",
+  })
+
+  const drinkSize = await prisma.modifierGroup.create({
+    data: {
+      locationId: location.id,
+      name: 'Drink Size',
       minSelected: 1,
       maxSelected: 1,
       isRequired: true,
-      sortOrder: 1,
-      options: [
-        { key: "small", name: 'Small 25cm', priceDelta: 0 },
-        { key: "medium", name: 'Medium 30cm', priceDelta: 2.0 },
-        { key: "large", name: 'Large 35cm', priceDelta: 4.0 },
-      ],
+      sortOrder: 4,
+      isActive: true,
     },
-    {
-      key: "pizza_toppings",
-      name: "Extra Toppings",
-      minSelected: 0,
-      maxSelected: 6,
-      isRequired: false,
+  })
+
+  const extraCheese = await prisma.modifierOption.create({
+    data: {
+      modifierGroupId: burgerAddons.id,
+      name: 'Extra Cheese',
+      priceDelta: '1.50',
+      sortOrder: 1,
+      isActive: true,
+    },
+  })
+
+  const extraBacon = await prisma.modifierOption.create({
+    data: {
+      modifierGroupId: burgerAddons.id,
+      name: 'Bacon',
+      priceDelta: '2.00',
       sortOrder: 2,
-      options: [
-        { key: "mushrooms", name: "Mushrooms", priceDelta: 1.0 },
-        { key: "olives", name: "Olives", priceDelta: 0.8 },
-        { key: "pepperoni", name: "Pepperoni", priceDelta: 1.5 },
-        { key: "extra_mozzarella", name: "Extra mozzarella", priceDelta: 1.2 },
-      ],
+      isActive: true,
     },
-    {
-      key: "drink_ice",
-      name: "Ice",
-      minSelected: 0,
-      maxSelected: 1,
-      isRequired: false,
+  })
+
+  const jalapeno = await prisma.modifierOption.create({
+    data: {
+      modifierGroupId: burgerAddons.id,
+      name: 'Jalapeno',
+      priceDelta: '1.00',
+      sortOrder: 3,
+      isActive: true,
+    },
+  })
+
+  const mediumRare = await prisma.modifierOption.create({
+    data: {
+      modifierGroupId: burgerCooking.id,
+      name: 'Medium Rare',
+      priceDelta: '0.00',
       sortOrder: 1,
-      options: [
-        { key: "no_ice", name: "No ice" },
-        { key: "regular_ice", name: "Regular ice" },
-        { key: "extra_ice", name: "Extra ice" },
-      ],
+      isActive: true,
     },
-    {
-      key: "coffee_milk",
-      name: "Milk",
-      minSelected: 0,
-      maxSelected: 1,
-      isRequired: false,
-      sortOrder: 1,
-      options: [
-        { key: "regular", name: "Regular" },
-        { key: "oat", name: "Oat milk", priceDelta: 0.7 },
-        { key: "almond", name: "Almond milk", priceDelta: 0.9 },
-        { key: "lactose_free", name: "Lactose-free", priceDelta: 0.5 },
-      ],
-    },
-    {
-      key: "coffee_syrup",
-      name: "Syrup",
-      minSelected: 0,
-      maxSelected: 2,
-      isRequired: false,
+  })
+
+  const medium = await prisma.modifierOption.create({
+    data: {
+      modifierGroupId: burgerCooking.id,
+      name: 'Medium',
+      priceDelta: '0.00',
       sortOrder: 2,
-      options: [
-        { key: "vanilla", name: "Vanilla", priceDelta: 0.5 },
-        { key: "caramel", name: "Caramel", priceDelta: 0.5 },
-        { key: "hazelnut", name: "Hazelnut", priceDelta: 0.5 },
-      ],
+      isActive: true,
     },
-  ];
+  })
 
-  const itemGroupMap: ItemGroupMapSeed[] = [
-    { itemKey: "burger", groupKey: "burger_cook" },
-    { itemKey: "burger", groupKey: "burger_addons" },
-    { itemKey: "burger", groupKey: "sauce_choice" },
-    { itemKey: "fries", groupKey: "sauce_choice" },
-    { itemKey: "wings", groupKey: "sauce_choice" },
+  const wellDone = await prisma.modifierOption.create({
+    data: {
+      modifierGroupId: burgerCooking.id,
+      name: 'Well Done',
+      priceDelta: '0.00',
+      sortOrder: 3,
+      isActive: true,
+    },
+  })
 
-    { itemKey: "pizza", groupKey: "pizza_size" },
-    { itemKey: "pizza", groupKey: "pizza_toppings" },
+  const extraMozzarella = await prisma.modifierOption.create({
+    data: {
+      modifierGroupId: pizzaExtras.id,
+      name: 'Extra Mozzarella',
+      priceDelta: '1.50',
+      sortOrder: 1,
+      isActive: true,
+    },
+  })
 
-    { itemKey: "cola", groupKey: "drink_ice" },
-    { itemKey: "beer", groupKey: "drink_ice" },
+  const mushrooms = await prisma.modifierOption.create({
+    data: {
+      modifierGroupId: pizzaExtras.id,
+      name: 'Mushrooms',
+      priceDelta: '1.20',
+      sortOrder: 2,
+      isActive: true,
+    },
+  })
 
-    { itemKey: "latte", groupKey: "coffee_milk" },
-    { itemKey: "latte", groupKey: "coffee_syrup" },
-  ];
+  const olives = await prisma.modifierOption.create({
+    data: {
+      modifierGroupId: pizzaExtras.id,
+      name: 'Olives',
+      priceDelta: '1.20',
+      sortOrder: 3,
+      isActive: true,
+    },
+  })
 
-  // 1) Categories
-  const categoryByKey = new Map<string, { id: number }>();
+  const smallDrink = await prisma.modifierOption.create({
+    data: {
+      modifierGroupId: drinkSize.id,
+      name: 'Small',
+      priceDelta: '0.00',
+      sortOrder: 1,
+      isActive: true,
+    },
+  })
 
-  for (const c of categories) {
-    // Нет уникального индекса - поэтому ищем вручную
-    const existing = await prisma.menuCategory.findFirst({
-      where: { locationId: location.id, name: c.name },
-      select: { id: true },
-    });
+  const largeDrink = await prisma.modifierOption.create({
+    data: {
+      modifierGroupId: drinkSize.id,
+      name: 'Large',
+      priceDelta: '1.00',
+      sortOrder: 2,
+      isActive: true,
+    },
+  })
 
-    const row =
-      existing ??
-      (await prisma.menuCategory.create({
-        data: {
-          locationId: location.id,
-          name: c.name,
-          sortOrder: c.sortOrder,
-          isActive: true,
-        },
-        select: { id: true },
-      }));
-
-    categoryByKey.set(c.key, row);
-  }
-
-  // 2) Modifier Groups + Options
-  const groupByKey = new Map<string, { id: number }>();
-  const optionByKey = new Map<string, { id: number }>(); // key = `${groupKey}:${optionKey}`
-
-  for (const g of modifierGroups) {
-    const existing = await prisma.modifierGroup.findFirst({
-      where: { locationId: location.id, name: g.name },
-      select: { id: true },
-    });
-
-    const group =
-      existing ??
-      (await prisma.modifierGroup.create({
-        data: {
-          locationId: location.id,
-          name: g.name,
-          minSelected: g.minSelected ?? null,
-          maxSelected: g.maxSelected ?? null,
-          isRequired: g.isRequired ?? false,
-          sortOrder: g.sortOrder ?? null,
-          isActive: true,
-        },
-        select: { id: true },
-      }));
-
-    groupByKey.set(g.key, group);
-
-    for (const o of g.options) {
-      const optExisting = await prisma.modifierOption.findFirst({
-        where: { modifierGroupId: group.id, name: o.name },
-        select: { id: true },
-      });
-
-      const opt =
-        optExisting ??
-        (await prisma.modifierOption.create({
-          data: {
-            modifierGroupId: group.id,
-            name: o.name,
-            priceDelta:
-              typeof o.priceDelta === "number" ? money(o.priceDelta) : null,
-            isActive: true,
-          },
-          select: { id: true },
-        }));
-
-      optionByKey.set(`${g.key}:${o.key}`, opt);
-    }
-  }
-
-  // 3) Menu Items
-  const itemByKey = new Map<string, { id: number }>();
-
-  for (const it of items) {
-    const category = categoryByKey.get(it.categoryKey);
-    if (!category) throw new Error(`Missing categoryKey: ${it.categoryKey}`);
-
-    const kdsStationId =
-      it.kdsStationCode ? kds[it.kdsStationCode]?.id : undefined;
-
-    const existing = await prisma.menuItem.findFirst({
-      where: {
-        locationId: location.id,
-        name: it.name,
-        categoryId: category.id,
+  await prisma.menuItemModifierGroup.createMany({
+    data: [
+      {
+        menuItemId: classicBurger.id,
+        modifierGroupId: burgerAddons.id,
       },
-      select: { id: true },
-    });
+      {
+        menuItemId: classicBurger.id,
+        modifierGroupId: burgerCooking.id,
+      },
+      {
+        menuItemId: cheeseburger.id,
+        modifierGroupId: burgerAddons.id,
+      },
+      {
+        menuItemId: cheeseburger.id,
+        modifierGroupId: burgerCooking.id,
+      },
+      {
+        menuItemId: margherita.id,
+        modifierGroupId: pizzaExtras.id,
+      },
+      {
+        menuItemId: pepperoni.id,
+        modifierGroupId: pizzaExtras.id,
+      },
+      {
+        menuItemId: cola.id,
+        modifierGroupId: drinkSize.id,
+      },
+      {
+        menuItemId: orangeJuice.id,
+        modifierGroupId: drinkSize.id,
+      },
+      {
+        menuItemId: beer.id,
+        modifierGroupId: drinkSize.id,
+      },
+    ],
+  })
 
-    const row =
-      existing ??
-      (await prisma.menuItem.create({
-        data: {
-          locationId: location.id,
-          categoryId: category.id,
-          name: it.name,
-          sku: it.sku ?? null,
-          basePrice: money(it.basePrice),
-          isAlcohol: it.isAlcohol ?? false,
-          isActive: true,
-          kdsStationId: kdsStationId ?? null,
-        },
-        select: { id: true },
-      }));
+  const openShift = await prisma.shift.create({
+    data: {
+      locationId: location.id,
+      userId: cashierUser.id,
+      terminalId: frontPos.id,
+      openedAt: new Date(),
+      closedAt: null,
+      openingCashAmount: '200.00',
+      closingCashAmount: null,
+      status: ShiftStatus.OPEN,
+    },
+  })
 
-    itemByKey.set(it.key, row);
-  }
+  const openOrder = await prisma.order.create({
+    data: {
+      locationId: location.id,
+      terminalId: frontPos.id,
+      shiftId: openShift.id,
+      tableId: t1.id,
+      guestId: guest.id,
+      membershipId: membership.id,
+      parentOrderId: null,
+      orderType: OrderType.DINE_IN,
+      status: OrderStatus.OPEN,
+      subtotalAmount: '29.50',
+      discountAmount: '2.95',
+      serviceChargeAmount: '0.00',
+      taxAmount: '5.31',
+      totalAmount: '31.86',
+      openedByUserId: cashierUser.id,
+      closedByUserId: null,
+      openedAt: new Date(),
+      closedAt: null,
+      note: 'Demo open table order',
+    },
+  })
 
-  // 4) Map groups to items (MenuItemModifierGroup)
-  for (const link of itemGroupMap) {
-    const item = itemByKey.get(link.itemKey);
-    const group = groupByKey.get(link.groupKey);
-    if (!item) throw new Error(`Missing itemKey: ${link.itemKey}`);
-    if (!group) throw new Error(`Missing groupKey: ${link.groupKey}`);
+  await prisma.table.update({
+    where: {
+      id: t1.id,
+    },
+    data: {
+      status: 'occupied',
+      activeOrderId: openOrder.id,
+    },
+  })
 
-    // есть @@unique([menuItemId, modifierGroupId]) → можно create with catch
-    const exists = await prisma.menuItemModifierGroup.findFirst({
-      where: { menuItemId: item.id, modifierGroupId: group.id },
-      select: { id: true },
-    });
+  const burgerOrderItem = await prisma.orderItem.create({
+    data: {
+      orderId: openOrder.id,
+      menuItemId: classicBurger.id,
+      seatNumber: 1,
+      quantity: 1,
+      basePrice: '12.50',
+      discountAmount: '1.25',
+      finalPrice: '11.25',
+      comment: 'No onions',
+      kdsStatus: KdsStatus.PENDING,
+      status: OrderItemStatus.ACTIVE,
+    },
+  })
 
-    if (!exists) {
-      await prisma.menuItemModifierGroup.create({
-        data: { menuItemId: item.id, modifierGroupId: group.id },
-      });
-    }
-  }
+  await prisma.orderItemModifier.createMany({
+    data: [
+      {
+        orderItemId: burgerOrderItem.id,
+        modifierOptionId: extraCheese.id,
+        priceDelta: '1.50',
+      },
+      {
+        orderItemId: burgerOrderItem.id,
+        modifierOptionId: medium.id,
+        priceDelta: '0.00',
+      },
+    ],
+  })
 
-  console.log("Seed completed");
-  console.log(`Location id: ${location.id}`);
+  const friesOrderItem = await prisma.orderItem.create({
+    data: {
+      orderId: openOrder.id,
+      menuItemId: fries.id,
+      seatNumber: 1,
+      quantity: 1,
+      basePrice: '5.50',
+      discountAmount: '0.55',
+      finalPrice: '4.95',
+      comment: null,
+      kdsStatus: KdsStatus.IN_PROGRESS,
+      status: OrderItemStatus.ACTIVE,
+    },
+  })
+
+  const colaOrderItem = await prisma.orderItem.create({
+    data: {
+      orderId: openOrder.id,
+      menuItemId: cola.id,
+      seatNumber: 2,
+      quantity: 2,
+      basePrice: '3.50',
+      discountAmount: '1.15',
+      finalPrice: '6.15',
+      comment: 'One with ice, one without',
+      kdsStatus: KdsStatus.PENDING,
+      status: OrderItemStatus.ACTIVE,
+    },
+  })
+
+  await prisma.orderItemModifier.create({
+    data: {
+      orderItemId: colaOrderItem.id,
+      modifierOptionId: largeDrink.id,
+      priceDelta: '1.00',
+    },
+  })
+
+  const kitchenTicket = await prisma.kitchenTicket.create({
+    data: {
+      locationId: location.id,
+      orderId: openOrder.id,
+      tableId: t1.id,
+      kdsStationId: hotKitchen.id,
+      terminalId: frontPos.id,
+      createdByUserId: cashierUser.id,
+      status: KitchenTicketStatus.OPEN,
+    },
+  })
+
+  await prisma.kitchenTicketItem.createMany({
+    data: [
+      {
+        ticketId: kitchenTicket.id,
+        orderItemId: burgerOrderItem.id,
+        quantity: 1,
+      },
+      {
+        ticketId: kitchenTicket.id,
+        orderItemId: friesOrderItem.id,
+        quantity: 1,
+      },
+    ],
+  })
+
+  await prisma.displayLayout.create({
+    data: {
+      locationId: location.id,
+      terminalId: frontPos.id,
+      name: 'Default POS Layout',
+      configJson: {
+        sections: ['tables', 'menu', 'cart'],
+      },
+      isDefault: true,
+    },
+  })
+
+  await prisma.savedFilter.create({
+    data: {
+      locationId: location.id,
+      userId: managerUser.id,
+      name: 'Open Orders',
+      scope: 'ORDERS',
+      filterJson: {
+        status: ['OPEN', 'SENT_TO_KITCHEN'],
+      },
+      isDefault: true,
+    },
+  })
+
+  await prisma.payment.create({
+    data: {
+      orderId: openOrder.id,
+      shiftId: openShift.id,
+      terminalId: frontPos.id,
+      amount: '10.00',
+      tipAmount: '0.00',
+      paymentMethod: PaymentMethod.CARD,
+      provider: 'demo-terminal',
+      transactionId: 'TXN-DEMO-0001',
+      status: PaymentStatus.APPROVED,
+      paidAt: new Date(),
+    },
+  })
+
+  console.log('Seed completed')
+  console.log(`Location id: ${location.id}`)
+  console.log('Users PINs: 1111, 2222, 3333, 4444')
+  console.log('Tables: T1, T2, T3, T4, P1, P2')
+  console.log(`Front POS terminal id: ${frontPos.id}`)
+  console.log(`Open order id on T1: ${openOrder.id}`)
+
+  void p1
+  void p2
+  void barTerminal
+  void kdsTerminal
+  void extraBacon
+  void jalapeno
+  void mediumRare
+  void wellDone
+  void extraMozzarella
+  void mushrooms
+  void olives
+  void smallDrink
+  void cheeseburger
+  void pepperoni
+  void caesarSalad
+  void orangeJuice
+  void beer
+  void t3
+  void t4
+  void adminUser
 }
 
 main()
-  .catch((e) => {
-    console.error("Seed failed");
-    console.error(e);
-    process.exit(1);
+  .then(async () => {
+    await prisma.$disconnect()
+    await pool.end()
   })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+  .catch(async (error) => {
+    console.error('Seed failed')
+    console.error(error)
+    await prisma.$disconnect()
+    await pool.end()
+    process.exit(1)
+  })

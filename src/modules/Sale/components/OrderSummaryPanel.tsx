@@ -27,9 +27,49 @@ interface OrderSummaryPanelProps {
   onDecrease: (itemId: string) => void;
   onDiscountChange: (tier: number | null) => void;
   onScheduleClick: () => void;
-  onNextStep: () => void;  // Keep for compatibility
-  onPrevStep: () => void;  // Keep for compatibility
+  onNextStep: () => void;
+  onPrevStep: () => void;
   className?: string;
+}
+
+function formatTime(date: Date | null): string {
+  if (!date) return '';
+
+  return date.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
+function CurrentTimeBadge() {
+  const [currentTime, setCurrentTime] = React.useState<string>('');
+
+  React.useEffect(() => {
+    const updateTime = () => {
+      setCurrentTime(
+        new Date().toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+        })
+      );
+    };
+
+    updateTime();
+
+    const timer = window.setInterval(updateTime, 30000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  return (
+    <span className="px-2.5 py-1 rounded-md bg-white/10 text-white/70 text-xs font-medium">
+      {currentTime || '--:--'}
+    </span>
+  );
 }
 
 export function OrderSummaryPanel({
@@ -53,45 +93,25 @@ export function OrderSummaryPanel({
   onPrevStep,
   className,
 }: OrderSummaryPanelProps) {
-  // These props are kept for API compatibility but no longer used in this component
   void _skipSeating;
   void _subtotal;
-  // Format time for display
-  const formatTime = (date: Date | null): string => {
-    if (!date) return '';
-    return date.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-    });
-  };
-
-  // Current time display
-  const currentTime = new Date().toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  });
 
   return (
     <div
       className={cn(
-        // Figma specs: wider panel, #404040 background, full height
         'w-[420px] xl:w-[510px] bg-[#404040] flex flex-col h-full',
         className
       )}
     >
-      {/* Header - Figma: Inter Semi Bold 28px */}
       <div className="px-6 pt-6 pb-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-white font-semibold text-[28px] leading-6">Order Summary</h2>
-          <div className="flex items-center gap-2">
-            {/* Current Time Badge */}
-            <span className="px-2.5 py-1 rounded-md bg-white/10 text-white/70 text-xs font-medium">
-              {currentTime}
-            </span>
+          <h2 className="text-white font-semibold text-[28px] leading-6">
+            Order Summary
+          </h2>
 
-            {/* Member/Non-Member Badge */}
+          <div className="flex items-center gap-2">
+            <CurrentTimeBadge />
+
             {isNonMember ? (
               <span className="px-3 py-1 rounded-lg bg-red-500/20 text-red-400 text-xs font-medium border border-red-500/30">
                 Non-Member
@@ -105,7 +125,6 @@ export function OrderSummaryPanel({
         </div>
       </div>
 
-      {/* Order Items List - scrollable area */}
       <div className="flex-1 overflow-y-auto px-6 py-4">
         {items.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-white/40">
@@ -121,7 +140,6 @@ export function OrderSummaryPanel({
         )}
       </div>
 
-      {/* Schedule Option - matching Figma layout */}
       <div className="px-6 py-3 border-t border-white/10">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -129,11 +147,12 @@ export function OrderSummaryPanel({
             <span className="text-white/70 text-sm">Schedule</span>
             <span className="text-white/40 text-xs">Optional</span>
           </div>
+
           <button
             onClick={onScheduleClick}
             className={cn(
               'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors',
-              'min-h-[36px]', // Touch target
+              'min-h-[36px]',
               scheduledTime
                 ? 'bg-[#4ADE80]/20 text-[#4ADE80]'
                 : 'bg-white/10 text-white/70 hover:bg-white/15'
@@ -145,16 +164,15 @@ export function OrderSummaryPanel({
         </div>
       </div>
 
-      {/* Bottom Section - Totals and Navigation */}
       <div className="px-6 py-3 border-t border-white/10">
         <div className="flex items-center justify-between h-[50px]">
-          {/* Left side: Item count badge + Totals */}
           <div className="flex items-center gap-3">
-            {/* Green circle with item count */}
             <div className="w-[36px] h-[36px] rounded-full bg-[#4ADE80] flex items-center justify-center flex-shrink-0">
-              <span className="text-[#1a1a1a] text-[16px] font-bold">{itemCount}</span>
+              <span className="text-[#1a1a1a] text-[16px] font-bold">
+                {itemCount}
+              </span>
             </div>
-            {/* Total and Tax */}
+
             <div className="flex flex-col">
               <span className="text-white text-[20px] font-bold leading-tight">
                 ${total.toFixed(2)}
@@ -165,16 +183,13 @@ export function OrderSummaryPanel({
             </div>
           </div>
 
-          {/* Right side: Discount + Navigation buttons */}
           <div className="flex items-center gap-2">
-            {/* Discount Popover - only shows when there are items */}
             <DiscountPopover
               selectedDiscount={selectedDiscount}
               onSelect={onDiscountChange}
               hasItems={items.length > 0}
             />
 
-            {/* Back button */}
             <button
               onClick={onPrevStep}
               disabled={currentStep === 0}
@@ -190,7 +205,6 @@ export function OrderSummaryPanel({
               <span>Back</span>
             </button>
 
-            {/* Next button */}
             <button
               onClick={onNextStep}
               disabled={!canProceed}
