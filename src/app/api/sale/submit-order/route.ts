@@ -182,6 +182,26 @@ export async function POST(request: Request) {
       let orderId = table.activeOrderId ?? null
 
       if (!orderId) {
+        const fallbackOpenOrder = await tx.order.findFirst({
+          where: {
+            tableId: table.id,
+            locationId,
+            closedAt: null,
+            status: {
+              in: [OrderStatus.OPEN, OrderStatus.SENT_TO_KITCHEN, OrderStatus.PARTIALLY_PAID],
+            },
+          },
+          orderBy: {
+            openedAt: 'desc',
+          },
+        })
+
+        if (fallbackOpenOrder) {
+          orderId = fallbackOpenOrder.id
+        }
+      }
+
+      if (!orderId) {
         const createdOrder = await tx.order.create({
           data: {
             locationId,
@@ -207,16 +227,6 @@ export async function POST(request: Request) {
         })
 
         orderId = createdOrder.id
-
-        await tx.table.update({
-          where: {
-            id: table.id,
-          },
-          data: {
-            activeOrderId: createdOrder.id,
-            status: 'occupied',
-          },
-        })
       }
 
       const order = await tx.order.findUnique({
@@ -232,6 +242,16 @@ export async function POST(request: Request) {
           error: 'Order not found after create/reuse',
         }
       }
+
+      await tx.table.update({
+        where: {
+          id: table.id,
+        },
+        data: {
+          activeOrderId: order.id,
+          status: 'occupied',
+        },
+      })
 
       const createdKdsItems: Array<{
         orderItemId: number
@@ -332,10 +352,7 @@ export async function POST(request: Request) {
       }
 
       if (createdKdsItems.length > 0) {
-        const stationGroups = new Map<
-          number,
-          Array<{ orderItemId: number; quantity: number }>
-        >()
+        const stationGroups = new Map<number, Array<{ orderItemId: number; quantity: number }>>()
 
         for (const item of createdKdsItems) {
           const existing = stationGroups.get(item.kdsStationId) ?? []
@@ -360,13 +377,11 @@ export async function POST(request: Request) {
           })
 
           await tx.kitchenTicketItem.createMany({
-            data: stationItems.map(
-              (stationItem: { orderItemId: number; quantity: number }) => ({
-                ticketId: ticket.id,
-                orderItemId: stationItem.orderItemId,
-                quantity: stationItem.quantity,
-              })
-            ),
+            data: stationItems.map((stationItem) => ({
+              ticketId: ticket.id,
+              orderItemId: stationItem.orderItemId,
+              quantity: stationItem.quantity,
+            })),
           })
         }
       }
@@ -409,6 +424,16 @@ export async function POST(request: Request) {
           taxAmount: taxAmount.toFixed(2),
           totalAmount: totalAmount.toFixed(2),
           note: body.notes ?? order.note,
+        },
+      })
+
+      await tx.table.update({
+        where: {
+          id: table.id,
+        },
+        data: {
+          activeOrderId: order.id,
+          status: 'occupied',
         },
       })
 

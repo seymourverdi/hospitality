@@ -139,7 +139,7 @@ function TableCard({ table, isSelected, onSelect }: TableCardProps) {
             {table.activeOrder.itemCount !== 1 ? 's' : ''}
           </div>
           <div className="mt-1 text-sm font-semibold text-white">
-            ${table.activeOrder.totalAmount.toFixed(2)}
+            ${Number(table.activeOrder.totalAmount || 0).toFixed(2)}
           </div>
         </div>
       ) : (

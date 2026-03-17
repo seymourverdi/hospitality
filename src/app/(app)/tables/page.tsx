@@ -302,7 +302,7 @@ export default function TablesPage() {
                               {table.activeOrder.itemCount !== 1 ? 's' : ''}
                             </div>
                             <div className="mt-1 text-sm font-semibold">
-                              ${table.activeOrder.totalAmount.toFixed(2)}
+                              ${Number(table.activeOrder.totalAmount || 0).toFixed(2)}
                             </div>
 
                             <button

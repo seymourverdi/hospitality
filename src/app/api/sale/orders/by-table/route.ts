@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { OrderStatus } from '@prisma/client'
 import { prisma } from '@/server/db'
 
 export const dynamic = 'force-dynamic'
@@ -34,30 +35,6 @@ export async function GET(request: Request) {
       },
       include: {
         area: true,
-        activeOrder: {
-          include: {
-            items: {
-              where: {
-                status: 'ACTIVE',
-              },
-              orderBy: {
-                id: 'asc',
-              },
-              include: {
-                menuItem: {
-                  include: {
-                    category: true,
-                  },
-                },
-                modifiers: {
-                  include: {
-                    modifierOption: true,
-                  },
-                },
-              },
-            },
-          },
-        },
       },
     })
 
@@ -71,6 +48,83 @@ export async function GET(request: Request) {
       )
     }
 
+    let activeOrder = await prisma.order.findFirst({
+      where: {
+        id: table.activeOrderId ?? -1,
+      },
+      include: {
+        items: {
+          where: {
+            status: 'ACTIVE',
+          },
+          orderBy: {
+            id: 'asc',
+          },
+          include: {
+            menuItem: {
+              include: {
+                category: true,
+              },
+            },
+            modifiers: {
+              include: {
+                modifierOption: true,
+              },
+            },
+          },
+        },
+      },
+    })
+
+    if (!activeOrder) {
+      activeOrder = await prisma.order.findFirst({
+        where: {
+          tableId: table.id,
+          closedAt: null,
+          status: {
+            in: [OrderStatus.OPEN, OrderStatus.SENT_TO_KITCHEN, OrderStatus.PARTIALLY_PAID],
+          },
+        },
+        orderBy: {
+          openedAt: 'desc',
+        },
+        include: {
+          items: {
+            where: {
+              status: 'ACTIVE',
+            },
+            orderBy: {
+              id: 'asc',
+            },
+            include: {
+              menuItem: {
+                include: {
+                  category: true,
+                },
+              },
+              modifiers: {
+                include: {
+                  modifierOption: true,
+                },
+              },
+            },
+          },
+        },
+      })
+
+      if (activeOrder) {
+        await prisma.table.update({
+          where: {
+            id: table.id,
+          },
+          data: {
+            activeOrderId: activeOrder.id,
+            status: 'occupied',
+          },
+        })
+      }
+    }
+
     const uiTable = {
       id: String(table.id),
       name: table.name,
@@ -82,10 +136,10 @@ export async function GET(request: Request) {
       seats: [],
       maxSeats: table.capacity,
       floorId: String(table.areaId),
-      status: table.status,
+      status: activeOrder ? 'occupied' : table.status,
     }
 
-    if (!table.activeOrder) {
+    if (!activeOrder) {
       return NextResponse.json({
         ok: true,
         table: uiTable,
@@ -95,16 +149,16 @@ export async function GET(request: Request) {
 
     const seatNumbers = Array.from(
       new Set(
-        table.activeOrder.items
+        activeOrder.items
           .map((item) => item.seatNumber)
           .filter((seat): seat is number => typeof seat === 'number' && seat > 0)
       )
     ).sort((a, b) => a - b)
 
     const order = {
-      id: table.activeOrder.id,
-      status: table.activeOrder.status,
-      items: table.activeOrder.items.map((item) => {
+      id: activeOrder.id,
+      status: activeOrder.status,
+      items: activeOrder.items.map((item) => {
         const modifiers = item.modifiers.map((modifier) => ({
           groupId: String(modifier.modifierOption.modifierGroupId),
           optionId: String(modifier.modifierOptionId),

@@ -1,5 +1,13 @@
 import { NextResponse } from 'next/server'
+import { OrderStatus, Prisma } from '@prisma/client'
 import { prisma } from '@/server/db'
+
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
+function d2(value: Prisma.Decimal) {
+  return value.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP)
+}
 
 export async function GET() {
   try {
@@ -15,22 +23,6 @@ export async function GET() {
           orderBy: {
             name: 'asc',
           },
-          include: {
-            activeOrder: {
-              include: {
-                items: {
-                  where: {
-                    status: 'ACTIVE',
-                  },
-                  select: {
-                    id: true,
-                    quantity: true,
-                    finalPrice: true,
-                  },
-                },
-              },
-            },
-          },
         },
       },
       orderBy: {
@@ -38,19 +30,67 @@ export async function GET() {
       },
     })
 
+    const tableIds = areas.flatMap((area) => area.tables.map((table) => table.id))
+
+    const fallbackOrders = tableIds.length
+      ? await prisma.order.findMany({
+          where: {
+            tableId: {
+              in: tableIds,
+            },
+            closedAt: null,
+            status: {
+              in: [OrderStatus.OPEN, OrderStatus.SENT_TO_KITCHEN, OrderStatus.PARTIALLY_PAID],
+            },
+          },
+          orderBy: {
+            openedAt: 'desc',
+          },
+          include: {
+            payments: {
+              where: {
+                status: 'APPROVED',
+              },
+              select: {
+                amount: true,
+              },
+            },
+            _count: {
+              select: {
+                items: true,
+                payments: true,
+              },
+            },
+          },
+        })
+      : []
+
+    const latestOpenOrderByTable = new Map<number, (typeof fallbackOrders)[number]>()
+
+    for (const order of fallbackOrders) {
+      if (order.tableId == null) continue
+      if (!latestOpenOrderByTable.has(order.tableId)) {
+        latestOpenOrderByTable.set(order.tableId, order)
+      }
+    }
+
     const floors = areas.map((area) => ({
       id: String(area.id),
       name: area.name,
       tables: area.tables.map((table, index) => {
-        const activeOrder = table.activeOrder
+        const activeOrder = latestOpenOrderByTable.get(table.id)
 
-        const itemCount = activeOrder
-          ? activeOrder.items.reduce((sum, item) => sum + item.quantity, 0)
-          : 0
+        let approvedTotal = new Prisma.Decimal(0)
+        if (activeOrder?.payments?.length) {
+          for (const payment of activeOrder.payments) {
+            approvedTotal = approvedTotal.add(payment.amount)
+          }
+        }
 
-        const totalAmount = activeOrder
-          ? activeOrder.items.reduce((sum, item) => sum + Number(item.finalPrice), 0)
-          : 0
+        const totalAmount = activeOrder ? activeOrder.totalAmount : new Prisma.Decimal(0)
+        const remaining = activeOrder ? totalAmount.sub(approvedTotal) : new Prisma.Decimal(0)
+        const hasTotal = activeOrder ? activeOrder.totalAmount.gt(0) : false
+        const isPaid = activeOrder ? hasTotal && remaining.lte(0) : false
 
         return {
           id: String(table.id),
@@ -63,13 +103,21 @@ export async function GET() {
           seats: [],
           maxSeats: table.capacity,
           floorId: String(area.id),
-          status: table.status,
+          status: activeOrder ? 'occupied' : table.status,
+          activeOrderId: activeOrder?.id ?? null,
           activeOrder: activeOrder
             ? {
                 id: activeOrder.id,
                 status: activeOrder.status,
-                itemCount,
-                totalAmount: Number(totalAmount.toFixed(2)),
+                openedAt: activeOrder.openedAt.toISOString(),
+                totalAmount: d2(activeOrder.totalAmount).toString(),
+                counts: {
+                  items: activeOrder._count.items,
+                  payments: activeOrder._count.payments,
+                },
+                paymentsApprovedTotal: d2(approvedTotal).toString(),
+                remaining: d2(remaining).toString(),
+                isPaid,
               }
             : null,
         }
@@ -88,7 +136,7 @@ export async function GET() {
         ok: false,
         error: 'Failed to load tables',
       },
-      { status: 500 },
+      { status: 500 }
     )
   }
 }
