@@ -59,6 +59,12 @@ enum ReservationSource {
   ONLINE
 }
 
+enum ReservationServiceType {
+  ALL_DAY_MENU
+  SOCIAL_LUNCH
+  MIXED
+}
+
 enum ShiftStatus {
   OPEN
   CLOSED
@@ -102,6 +108,10 @@ enum OrderItemStatus {
   VOID
 }
 
+/**
+ * CORE / LOCATION
+ */
+
 model RestaurantLocation {
   id        Int      @id @default(autoincrement())
   name      String
@@ -113,25 +123,30 @@ model RestaurantLocation {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  terminals       Terminal[]
-  areas           Area[]
-  tables          Table[]
-  users           User[]
-  menuCategories  MenuCategory[]
-  menuItems       MenuItem[]
-  modifierGroups  ModifierGroup[]
-  guests          Guest[]
-  kdsStations     KDSStation[]
-  shifts          Shift[]
-  reservations    Reservation[]
-  orders          Order[]
-  reportSnapshots ReportSnapshot[]
-  displayLayouts  DisplayLayout[]
-  savedFilters    SavedFilter[]
-  sessions        Session[]        @relation("LocationSessions")
-
-  kitchenTickets KitchenTicket[]
+  terminals        Terminal[]
+  areas            Area[]
+  tables           Table[]
+  users            User[]
+  menuCategories   MenuCategory[]
+  menuItems        MenuItem[]
+  modifierGroups   ModifierGroup[]
+  guests           Guest[]
+  kdsStations      KDSStation[]
+  shifts           Shift[]
+  reservations     Reservation[]
+  orders           Order[]
+  reportSnapshots  ReportSnapshot[]
+  displayLayouts   DisplayLayout[]
+  savedFilters     SavedFilter[]
+  sessions         Session[]         @relation("LocationSessions")
+  kitchenTickets   KitchenTicket[]
+  apiIdempotencies ApiIdempotency[]
+  settings         LocationSettings?
 }
+
+/**
+ * TERMINALS, KDS
+ */
 
 model Terminal {
   id           Int        @id @default(autoincrement())
@@ -151,10 +166,8 @@ model Terminal {
   orders         Order[]
   payments       Payment[]
   displayLayouts DisplayLayout[]
-
   kitchenTickets KitchenTicket[]
-
-  sessions Session[] @relation("TerminalSessions")
+  sessions       Session[] @relation("TerminalSessions")
 }
 
 model KDSStation {
@@ -169,36 +182,41 @@ model KDSStation {
 
   location RestaurantLocation @relation(fields: [locationId], references: [id])
 
-  terminals Terminal[]
-  menuItems MenuItem[]
-
+  terminals      Terminal[]
+  menuItems      MenuItem[]
   kitchenTickets KitchenTicket[]
 }
 
+/**
+ * USERS / ROLES / SHIFTS
+ */
+
 model User {
-  id         Int      @id @default(autoincrement())
-  locationId Int
-  firstName  String
-  lastName   String
-  pinCode    String
-  email      String?
-  phone      String?
-  roleId     Int
-  isActive   Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id          Int      @id @default(autoincrement())
+  locationId  Int
+  firstName   String
+  lastName    String
+  pinCode     String
+  email       String?
+  phone       String?
+  roleId      Int
+  avatarColor String?  @db.VarChar(32)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   location RestaurantLocation @relation(fields: [locationId], references: [id])
   role     Role               @relation(fields: [roleId], references: [id])
 
-  shifts       Shift[]
-  openedOrders Order[]       @relation("OpenedByUser")
-  closedOrders Order[]       @relation("ClosedByUser")
-  savedFilters SavedFilter[]
-
-  kitchenTickets KitchenTicket[]
-
-  sessions Session[] @relation("UserSessions")
+  shifts          Shift[]
+  openedOrders    Order[]       @relation("OpenedByUser")
+  closedOrders    Order[]       @relation("ClosedByUser")
+  servedOrders    Order[]       @relation("ServerUser")
+  savedFilters    SavedFilter[]
+  kitchenTickets  KitchenTicket[]
+  sessions        Session[]     @relation("UserSessions")
+  voidedOrderItems OrderItem[]  @relation("VoidedByUser")
+  devices         UserDevice[]
 }
 
 model Role {
@@ -212,17 +230,17 @@ model Role {
 }
 
 model Shift {
-  id                Int         @id @default(autoincrement())
-  locationId        Int
-  userId            Int
-  terminalId        Int
-  openedAt          DateTime
-  closedAt          DateTime?
-  openingCashAmount Decimal     @db.Decimal(10, 2)
-  closingCashAmount Decimal?    @db.Decimal(10, 2)
-  status            ShiftStatus
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
+  id                 Int         @id @default(autoincrement())
+  locationId         Int
+  userId             Int
+  terminalId         Int
+  openedAt           DateTime
+  closedAt           DateTime?
+  openingCashAmount  Decimal     @db.Decimal(10, 2)
+  closingCashAmount  Decimal?    @db.Decimal(10, 2)
+  status             ShiftStatus
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
 
   location RestaurantLocation @relation(fields: [locationId], references: [id])
   user     User               @relation(fields: [userId], references: [id])
@@ -232,6 +250,10 @@ model Shift {
   payments        Payment[]
   reportSnapshots ReportSnapshot[]
 }
+
+/**
+ * AREAS / TABLES
+ */
 
 model Area {
   id         Int      @id @default(autoincrement())
@@ -247,30 +269,33 @@ model Area {
 }
 
 model Table {
-  id         Int      @id @default(autoincrement())
-  locationId Int
-  areaId     Int
-  name       String
-  capacity   Int
-  status     String
-  isActive   Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id            Int      @id @default(autoincrement())
+  locationId    Int
+  areaId        Int
+  name          String
+  capacity      Int
+  status        String
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  activeOrderId Int?     @unique
 
   location RestaurantLocation @relation(fields: [locationId], references: [id])
   area     Area               @relation(fields: [areaId], references: [id])
 
-  orders       Order[]            @relation("TableOrders")
-  reservations ReservationTable[]
-
-  activeOrderId  Int?            @unique
-  activeOrder    Order?          @relation("ActiveOrderForTable", fields: [activeOrderId], references: [id])
+  orders         Order[]            @relation("TableOrders")
+  reservations   ReservationTable[]
+  activeOrder    Order?             @relation("ActiveOrderForTable", fields: [activeOrderId], references: [id])
   kitchenTickets KitchenTicket[]
 
   @@unique([locationId, areaId, name])
   @@index([locationId])
   @@index([areaId])
 }
+
+/**
+ * GUESTS / MEMBERSHIP
+ */
 
 model Guest {
   id         Int      @id @default(autoincrement())
@@ -304,17 +329,22 @@ model Membership {
   orders Order[]
 }
 
+/**
+ * RESERVATIONS
+ */
+
 model Reservation {
-  id              Int               @id @default(autoincrement())
-  locationId      Int
-  guestId         Int?
-  reservationTime DateTime
-  partySize       Int
-  status          ReservationStatus
-  source          ReservationSource
-  note            String?
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  id               Int                    @id @default(autoincrement())
+  locationId       Int
+  guestId          Int?
+  reservationTime  DateTime
+  partySize        Int
+  status           ReservationStatus
+  source           ReservationSource
+  serviceType      ReservationServiceType?
+  note             String?
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
 
   location RestaurantLocation @relation(fields: [locationId], references: [id])
   guest    Guest?             @relation(fields: [guestId], references: [id])
@@ -332,6 +362,10 @@ model ReservationTable {
 
   @@unique([reservationId, tableId])
 }
+
+/**
+ * MENU / MODIFIERS
+ */
 
 model MenuCategory {
   id          Int      @id @default(autoincrement())
@@ -415,37 +449,40 @@ model MenuItemModifierGroup {
   @@unique([menuItemId, modifierGroupId])
 }
 
+/**
+ * ORDERS / ITEMS / MODIFIERS
+ */
+
 model Order {
-  id                  Int         @id @default(autoincrement())
-  locationId          Int
-  terminalId          Int
-  shiftId             Int
-  tableId             Int?
-  guestId             Int?
-  membershipId        Int?
-  parentOrderId       Int?
-  orderType           OrderType
-  status              OrderStatus
-  subtotalAmount      Decimal     @db.Decimal(10, 2)
-  discountAmount      Decimal     @db.Decimal(10, 2)
-  serviceChargeAmount Decimal     @db.Decimal(10, 2)
-  taxAmount           Decimal     @db.Decimal(10, 2)
-  totalAmount         Decimal     @db.Decimal(10, 2)
-  openedByUserId      Int
-  closedByUserId      Int?
-  openedAt            DateTime
-  closedAt            DateTime?
-  note                String?
-  createdAt           DateTime    @default(now())
-  updatedAt           DateTime    @updatedAt
+  id                   Int         @id @default(autoincrement())
+  locationId           Int
+  terminalId           Int
+  shiftId              Int
+  tableId              Int?
+  guestId              Int?
+  membershipId         Int?
+  parentOrderId        Int?
+  serverUserId         Int?
+  orderType            OrderType
+  status               OrderStatus
+  subtotalAmount       Decimal     @db.Decimal(10, 2)
+  discountAmount       Decimal     @db.Decimal(10, 2)
+  serviceChargeAmount  Decimal     @db.Decimal(10, 2)
+  taxAmount            Decimal     @db.Decimal(10, 2)
+  totalAmount          Decimal     @db.Decimal(10, 2)
+  openedByUserId       Int
+  closedByUserId       Int?
+  openedAt             DateTime
+  closedAt             DateTime?
+  note                 String?
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
 
   location RestaurantLocation @relation(fields: [locationId], references: [id])
   terminal Terminal           @relation(fields: [terminalId], references: [id])
   shift    Shift              @relation(fields: [shiftId], references: [id])
 
-  tableIdRef Int?   @ignore
-  table      Table? @relation("TableOrders", fields: [tableId], references: [id])
-
+  table          Table? @relation("TableOrders", fields: [tableId], references: [id])
   activeForTable Table? @relation("ActiveOrderForTable")
 
   guest      Guest?      @relation(fields: [guestId], references: [id])
@@ -454,15 +491,17 @@ model Order {
   parentOrder Order?  @relation("OrderToOrder", fields: [parentOrderId], references: [id])
   childOrders Order[] @relation("OrderToOrder")
 
-  openedByUser User  @relation("OpenedByUser", fields: [openedByUserId], references: [id])
-  closedByUser User? @relation("ClosedByUser", fields: [closedByUserId], references: [id])
+  openedByUser User   @relation("OpenedByUser", fields: [openedByUserId], references: [id])
+  closedByUser User?  @relation("ClosedByUser", fields: [closedByUserId], references: [id])
+  serverUser   User?  @relation("ServerUser", fields: [serverUserId], references: [id])
 
-  items    OrderItem[]
-  payments Payment[]
-
+  items          OrderItem[]
+  payments       Payment[]
   kitchenTickets KitchenTicket[]
+  refunds        PaymentRefund[] @relation("OrderRefunds")
 
-  refunds PaymentRefund[] @relation("OrderRefunds")
+  @@index([serverUserId])
+  @@index([tableId, status, closedAt])
 }
 
 model OrderItem {
@@ -470,6 +509,7 @@ model OrderItem {
   orderId        Int
   menuItemId     Int
   seatNumber     Int?
+  courseNumber   Int?
   quantity       Int
   basePrice      Decimal         @db.Decimal(10, 2)
   discountAmount Decimal         @db.Decimal(10, 2)
@@ -483,12 +523,15 @@ model OrderItem {
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 
-  order    Order    @relation(fields: [orderId], references: [id])
-  menuItem MenuItem @relation(fields: [menuItemId], references: [id])
+  order        Order    @relation(fields: [orderId], references: [id])
+  menuItem     MenuItem @relation(fields: [menuItemId], references: [id])
+  voidedByUser User?    @relation("VoidedByUser", fields: [voidedByUserId], references: [id])
 
-  modifiers OrderItemModifier[]
-
+  modifiers          OrderItemModifier[]
   kitchenTicketItems KitchenTicketItem[]
+
+  @@index([courseNumber])
+  @@index([voidedByUserId])
 }
 
 model OrderItemModifier {
@@ -505,20 +548,24 @@ model OrderItemModifier {
   @@unique([orderItemId, modifierOptionId])
 }
 
+/**
+ * PAYMENTS
+ */
+
 model Payment {
-  id            Int           @id @default(autoincrement())
-  orderId       Int
-  shiftId       Int
-  terminalId    Int
-  amount        Decimal       @db.Decimal(10, 2)
-  tipAmount     Decimal       @db.Decimal(10, 2)
-  paymentMethod PaymentMethod
-  provider      String?
-  transactionId String?
-  status        PaymentStatus
-  paidAt        DateTime?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id             Int           @id @default(autoincrement())
+  orderId        Int
+  shiftId        Int
+  terminalId     Int
+  amount         Decimal       @db.Decimal(10, 2)
+  tipAmount      Decimal       @db.Decimal(10, 2)
+  paymentMethod  PaymentMethod
+  provider       String?
+  transactionId  String?
+  status         PaymentStatus
+  paidAt         DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
   order    Order    @relation(fields: [orderId], references: [id])
   shift    Shift    @relation(fields: [shiftId], references: [id])
@@ -528,6 +575,10 @@ model Payment {
 
   @@unique([provider, transactionId], name: "provider_transactionId")
 }
+
+/**
+ * REPORTING / CONFIG
+ */
 
 model ReportSnapshot {
   id         Int        @id @default(autoincrement())
@@ -664,4 +715,36 @@ model PaymentRefund {
   @@unique([provider, refundTransactionId], name: "provider_refundTransactionId")
   @@index([orderId])
   @@index([paymentId])
+}
+
+model LocationSettings {
+  id            Int      @id @default(autoincrement())
+  locationId    Int      @unique
+  statsConfig   Json
+  saleConfig    Json
+  rsvpConfig    Json
+  displayConfig Json
+  tablesConfig  Json
+  filterConfig  Json
+  logConfig     Json
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  location RestaurantLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@index([locationId])
+}
+
+model UserDevice {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  token     String   @unique
+  platform  String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
