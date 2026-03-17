@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/server/db'
-import { KdsStatus, OrderItemStatus, OrderStatus, OrderType, ShiftStatus } from '@prisma/client'
+import {
+  KdsStatus,
+  OrderItemStatus,
+  OrderStatus,
+  OrderType,
+  ShiftStatus,
+} from '@prisma/client'
 
 type SaleSubmitItem = {
   productId: string
@@ -35,22 +41,6 @@ function toPositiveInt(value: unknown): number | null {
 
 function money(value: number) {
   return Number(value.toFixed(2))
-}
-
-function isAuthorized(request: Request): boolean {
-  const expectedKey = process.env.SALE_API_KEY
-  if (!expectedKey) {
-    return true
-  }
-
-  const authHeader = request.headers.get('authorization') ?? ''
-  const bearer = authHeader.startsWith('Bearer ')
-    ? authHeader.slice('Bearer '.length).trim()
-    : ''
-
-  const headerKey = request.headers.get('x-sale-api-key')?.trim() ?? ''
-
-  return bearer === expectedKey || headerKey === expectedKey
 }
 
 async function getOrCreateOpenShift(locationId: number) {
@@ -110,8 +100,6 @@ async function getOrCreateOpenShift(locationId: number) {
 
 export async function POST(request: Request) {
   try {
-  
-
     const body = (await request.json()) as SaleSubmitBody
     const tableId = toPositiveInt(body.tableId)
     const items = Array.isArray(body.items) ? body.items : []

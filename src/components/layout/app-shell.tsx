@@ -1,50 +1,82 @@
-// City Club HMS - App Shell
-// Main layout wrapper with responsive navigation matching Figma
+'use client'
 
-'use client';
-
-import * as React from 'react';
-import { cn } from '@/core/lib/utils';
-import { SidebarNav } from './sidebar-nav';
-import { BottomNav } from './bottom-nav';
-import { Toaster } from '@/components/ui/toaster';
+import * as React from 'react'
+import { cn } from '@/core/lib/utils'
+import { SidebarNav } from './sidebar-nav'
+import { BottomNav } from './bottom-nav'
+import { Toaster } from '@/components/ui/toaster'
+import { authFetch } from '@/lib/pos/auth-client'
 
 interface AppShellProps {
-  children: React.ReactNode;
-  className?: string;
+  children: React.ReactNode
+  className?: string
+}
+
+type MeResponse = {
+  user?: {
+    id: number
+    firstName: string
+    lastName: string
+    roleId: number
+    locationId: number
+  }
+}
+
+function buildUserName(user?: MeResponse['user']) {
+  if (!user) return 'User'
+  const fullName = `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim()
+  return fullName || 'User'
 }
 
 export function AppShell({ children, className }: AppShellProps) {
-  // Mock user - will be replaced with auth context
-  const user = {
-    name: 'Dustin S',
-    avatar: undefined,
-  };
+  const [userName, setUserName] = React.useState('User')
+
+  React.useEffect(() => {
+    let cancelled = false
+
+    async function loadMe() {
+      try {
+        const res = await authFetch('/api/me', {
+          method: 'GET',
+        })
+
+        if (!res.ok) return
+
+        const data = (await res.json()) as MeResponse
+
+        if (cancelled) return
+
+        setUserName(buildUserName(data.user))
+      } catch {
+        if (cancelled) return
+      }
+    }
+
+    void loadMe()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const user = React.useMemo(
+    () => ({
+      name: userName,
+      avatar: undefined as string | undefined,
+    }),
+    [userName]
+  )
 
   return (
-    <div className="min-h-screen bg-[#292929]">
-      {/* Desktop Sidebar - 85px width matching Figma */}
+    <div className={cn('min-h-screen bg-background', className)}>
       <SidebarNav user={user} />
 
-      {/* Main Content */}
-      <main
-        className={cn(
-          'min-h-screen',
-          // Offset for sidebar on desktop (85px)
-          'lg:pl-[85px]',
-          // Offset for bottom nav on mobile
-          'pb-16 lg:pb-0',
-          className
-        )}
-      >
+      <main className="min-w-0 md:pl-[84px]">
         {children}
       </main>
 
-      {/* Mobile Bottom Nav */}
       <BottomNav />
-
-      {/* Toast Notifications */}
       <Toaster />
     </div>
-  );
+  )
 }

@@ -14,22 +14,6 @@ function d2(value: Prisma.Decimal | number | string) {
   return new Prisma.Decimal(value).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP)
 }
 
-function isAuthorized(request: Request): boolean {
-  const expectedKey = process.env.SALE_API_KEY
-  if (!expectedKey) {
-    return true
-  }
-
-  const authHeader = request.headers.get('authorization') ?? ''
-  const bearer = authHeader.startsWith('Bearer ')
-    ? authHeader.slice('Bearer '.length).trim()
-    : ''
-
-  const headerKey = request.headers.get('x-sale-api-key')?.trim() ?? ''
-
-  return bearer === expectedKey || headerKey === expectedKey
-}
-
 async function getOpenShift(locationId: number) {
   return prisma.shift.findFirst({
     where: {
@@ -47,7 +31,7 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
-   
+    void request
 
     const orderId = toPositiveInt(params.id)
 
