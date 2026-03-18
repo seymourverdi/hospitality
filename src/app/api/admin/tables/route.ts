@@ -76,6 +76,16 @@ export async function GET(request: Request) {
               name: true,
             },
           },
+          activeOrderId: true,
+          activeOrder: {
+            select: {
+              id: true,
+              status: true,
+              totalAmount: true,
+              openedAt: true,
+              _count: { select: { items: true } },
+            },
+          },
         },
       }),
     ])
@@ -84,7 +94,15 @@ export async function GET(request: Request) {
       ok: true,
       locations,
       areas,
-      tables,
+      tables: tables.map(t => ({
+        ...t,
+        activeOrder: t.activeOrder ? {
+          ...t.activeOrder,
+          totalAmount: t.activeOrder.totalAmount.toString(),
+          openedAt: t.activeOrder.openedAt.toISOString(),
+          itemCount: t.activeOrder._count.items,
+        } : null,
+      })),
     })
   } catch (error) {
     console.error('GET /api/admin/tables failed', error)

@@ -24,7 +24,7 @@ type ApiTable = {
     id: number;
     status: string;
     itemCount: number;
-    totalAmount: number;
+    totalAmount: number | string;
   } | null;
 };
 
@@ -348,7 +348,7 @@ export function SelectTableScreen({ className }: SelectTableScreenProps) {
                   Existing order #{selectedTableMeta.activeOrder.id} ·{' '}
                   {selectedTableMeta.activeOrder.itemCount} item
                   {selectedTableMeta.activeOrder.itemCount !== 1 ? 's' : ''} · $
-                  {selectedTableMeta.activeOrder.totalAmount.toFixed(2)}
+                  {Number(selectedTableMeta.activeOrder.totalAmount || 0).toFixed(2)}
                 </div>
               ) : (
                 <div className="mt-2 text-xs text-white/60">
