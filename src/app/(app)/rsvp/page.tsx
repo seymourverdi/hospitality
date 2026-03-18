@@ -608,9 +608,6 @@ export default function RsvpPage() {
           areas={areas}
           onCreated={() => void loadAll()}
         />
-      </div>
-    </div>
-
       {/* Status context menu */}
       {statusMenu && (
         <>
@@ -640,5 +637,7 @@ export default function RsvpPage() {
           </div>
         </>
       )}
+      </div>
+    </div>
   );
 }
