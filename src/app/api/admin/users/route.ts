@@ -25,6 +25,7 @@ export async function GET() {
           phone: true,
           roleId: true,
           isActive: true,
+          avatarColor: true,
           location: {
             select: {
               id: true,
@@ -87,6 +88,7 @@ export async function POST(request: Request) {
     const email = body.email ? String(body.email).trim() : null
     const phone = body.phone ? String(body.phone).trim() : null
     const isActive = Boolean(body.isActive ?? true)
+    const avatarColor = body.avatarColor ? String(body.avatarColor).trim() : null
 
     if (!locationId) {
       return NextResponse.json(
@@ -128,6 +130,7 @@ export async function POST(request: Request) {
         email,
         phone,
         isActive,
+        avatarColor,
       },
       select: {
         id: true,
