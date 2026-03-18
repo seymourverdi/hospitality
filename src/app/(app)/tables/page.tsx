@@ -103,13 +103,68 @@ function RoundTable({ name, size, seats, hasOrder, isSelected }: {
 
 // ─── Table popup ─────────────────────────────────────────────────────────────
 
-function TablePopup({ table, onClose }: { table: ApiTable; onClose: () => void }) {
+type OrderItem = {
+  id: number;
+  qty: number;
+  note: string;
+  product: { name: string; price: number };
+  modifiers: { name: string; priceAdjustment: number }[];
+};
+
+type FullOrder = {
+  id: number;
+  status: string;
+  items: OrderItem[];
+  seatNumbers: number[];
+};
+
+function TablePopup({ table }: { table: ApiTable }) {
   const hasOrder = !!table.activeOrder;
   const order = table.activeOrder;
+  const [fullOrder, setFullOrder] = React.useState<FullOrder | null>(null);
+  const [loadingOrder, setLoadingOrder] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!hasOrder) return;
+    setLoadingOrder(true);
+    fetch(`/api/sale/orders/by-table?tableId=${table.id}`)
+      .then(r => r.json())
+      .then((data: { ok: boolean; order?: FullOrder }) => {
+        if (data.ok && data.order) setFullOrder(data.order);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingOrder(false));
+  }, [table.id, hasOrder]);
+
+  const [paying, setPaying] = React.useState(false);
+  const [payError, setPayError] = React.useState<string | null>(null);
+
+  async function handlePayClose() {
+    if (!order?.id) return;
+    setPaying(true);
+    setPayError(null);
+    try {
+      const res = await fetch(`/api/sale/orders/${order.id}/pay-close`, { method: 'POST' });
+      const data = await res.json() as { ok: boolean; error?: string };
+      if (!data.ok) throw new Error(data.error ?? 'Failed');
+      // Reload page to refresh table status
+      window.location.reload();
+    } catch (e) {
+      setPayError(e instanceof Error ? e.message : 'Failed to pay');
+      setPaying(false);
+    }
+  }
 
   function goToSale() {
     window.location.href = `/sale?tableId=${table.id}&orderId=${order?.id ?? ''}`;
   }
+
+  const total = fullOrder
+    ? fullOrder.items.reduce((sum, item) => {
+        const modsTotal = item.modifiers.reduce((s, m) => s + m.priceAdjustment, 0);
+        return sum + (item.product.price + modsTotal) * item.qty;
+      }, 0)
+    : Number(order?.totalAmount ?? 0);
 
   return (
     <div
@@ -117,77 +172,133 @@ function TablePopup({ table, onClose }: { table: ApiTable; onClose: () => void }
       style={{
         position: 'absolute', top: 'calc(100% + 8px)', left: '50%',
         transform: 'translateX(-50%)',
-        backgroundColor: '#1e1e1e', border: '1px solid #444',
-        borderRadius: 12, padding: 0, minWidth: 200, maxWidth: 240,
-        zIndex: 30, boxShadow: '0 12px 40px rgba(0,0,0,0.7)',
+        backgroundColor: '#1e1e1e', border: '1px solid #3a3a3a',
+        borderRadius: 14, padding: 0, minWidth: 270, maxWidth: 310,
+        zIndex: 30, boxShadow: '0 16px 48px rgba(0,0,0,0.8)',
         overflow: 'hidden',
       }}>
+
       {/* Header */}
       <div style={{
-        padding: '10px 14px', borderBottom: '1px solid #333',
-        backgroundColor: hasOrder ? 'rgba(192,57,43,0.2)' : 'rgba(34,197,94,0.1)',
+        padding: '10px 14px', borderBottom: '1px solid #2a2a2a',
+        backgroundColor: hasOrder ? 'rgba(192,57,43,0.18)' : 'rgba(34,197,94,0.08)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>{table.name}</span>
-          <span style={{
-            fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 6,
-            backgroundColor: hasOrder ? 'rgba(192,57,43,0.4)' : 'rgba(34,197,94,0.2)',
-            color: hasOrder ? '#f88' : '#4ade80',
-          }}>
-            {hasOrder ? 'Occupied' : 'Available'}
-          </span>
+        <div>
+          <span style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>{table.name}</span>
+          <span style={{ fontSize: 11, color: '#666', marginLeft: 8 }}>{table.capacity} seats</span>
         </div>
-        <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
-          {table.capacity} seats
-        </div>
+        <span style={{
+          fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 6, textTransform: 'uppercase',
+          backgroundColor: hasOrder ? 'rgba(192,57,43,0.35)' : 'rgba(34,197,94,0.2)',
+          color: hasOrder ? '#f88' : '#4ade80',
+        }}>
+          {hasOrder ? 'Occupied' : 'Available'}
+        </span>
       </div>
 
       {hasOrder && order ? (
         <>
-          {/* Order details */}
-          <div style={{ padding: '10px 14px', borderBottom: '1px solid #2a2a2a' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-              <span style={{ fontSize: 11, color: '#888' }}>Order #{order.id}</span>
-              <span style={{ fontSize: 11, color: '#888' }}>
-                {new Date(order.openedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
-              </span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <div style={{ fontSize: 11, color: '#888' }}>{order.itemCount} item{order.itemCount !== 1 ? 's' : ''}</div>
-              </div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: '#f88' }}>
-                ${Number(order.totalAmount).toFixed(2)}
-              </div>
-            </div>
+          {/* Order meta */}
+          <div style={{ padding: '8px 14px', borderBottom: '1px solid #2a2a2a', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: 11, color: '#666' }}>Order #{order.id}</span>
+            <span style={{ fontSize: 11, color: '#666' }}>
+              {new Date(order.openedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+            </span>
           </div>
+
+          {/* Items list */}
+          <div style={{ maxHeight: 260, overflowY: 'auto', padding: '6px 0' }}>
+            {loadingOrder ? (
+              <div style={{ padding: '16px 14px', textAlign: 'center', fontSize: 12, color: '#555' }}>Loading...</div>
+            ) : fullOrder && fullOrder.items.length > 0 ? (
+              fullOrder.items.map((item, i) => (
+                <div key={item.id ?? i} style={{ padding: '5px 14px', borderBottom: '1px solid #222' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                      <span style={{ fontSize: 11, color: '#888', minWidth: 16 }}>{item.qty}×</span>
+                      <span style={{ fontSize: 13, color: '#ddd', fontWeight: 500 }}>{item.product.name}</span>
+                    </div>
+                    <span style={{ fontSize: 12, color: '#aaa' }}>
+                      ${((item.product.price + item.modifiers.reduce((s, m) => s + m.priceAdjustment, 0)) * item.qty).toFixed(2)}
+                    </span>
+                  </div>
+                  {item.modifiers.length > 0 && (
+                    <div style={{ marginLeft: 22, marginTop: 2 }}>
+                      {item.modifiers.map((mod, j) => (
+                        <span key={j} style={{
+                          display: 'inline-block', fontSize: 10, color: '#f97316',
+                          backgroundColor: 'rgba(249,115,22,0.1)', borderRadius: 4,
+                          padding: '1px 6px', marginRight: 4, marginBottom: 2,
+                        }}>
+                          {mod.name}{mod.priceAdjustment > 0 ? ` +$${mod.priceAdjustment.toFixed(2)}` : ''}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {item.note && (
+                    <div style={{ marginLeft: 22, fontSize: 10, color: '#666', fontStyle: 'italic', marginTop: 2 }}>
+                      "{item.note}"
+                    </div>
+                  )}
+                </div>
+              ))
+            ) : (
+              <div style={{ padding: '10px 14px', fontSize: 12, color: '#555' }}>
+                {order.itemCount} item{order.itemCount !== 1 ? 's' : ''}
+              </div>
+            )}
+          </div>
+
+          {/* Total */}
+          <div style={{
+            padding: '8px 14px', borderTop: '1px solid #2a2a2a',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            backgroundColor: '#161616',
+          }}>
+            <span style={{ fontSize: 12, color: '#888' }}>Total</span>
+            <span style={{ fontSize: 18, fontWeight: 700, color: '#f87171' }}>${total.toFixed(2)}</span>
+          </div>
+
+          {/* Pay error */}
+          {payError && (
+            <div style={{ padding: '6px 14px', fontSize: 11, color: '#f87171', backgroundColor: 'rgba(248,113,113,0.1)' }}>
+              {payError}
+            </div>
+          )}
+
           {/* Actions */}
-          <div style={{ padding: '10px 14px', display: 'flex', gap: 8 }}>
-            <button
-              type="button"
-              onClick={goToSale}
+          <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <button type="button" onClick={goToSale}
               style={{
-                flex: 1, padding: '8px 0', borderRadius: 8, border: 'none',
+                width: '100%', padding: '9px 0', borderRadius: 10, border: 'none',
                 backgroundColor: '#22c55e', color: 'white',
-                fontSize: 13, fontWeight: 600, cursor: 'pointer',
-              }}
-            >
+                fontSize: 13, fontWeight: 700, cursor: 'pointer',
+              }}>
               View Order →
+            </button>
+            <button type="button" onClick={() => void handlePayClose()}
+              disabled={paying}
+              style={{
+                width: '100%', padding: '9px 0', borderRadius: 10,
+                border: '1px solid #444',
+                backgroundColor: paying ? '#2a2a2a' : '#1a1a2e',
+                color: paying ? '#666' : '#818cf8',
+                fontSize: 13, fontWeight: 600, cursor: paying ? 'not-allowed' : 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              }}>
+              {paying ? 'Processing...' : '💳 Pay & Close Table'}
             </button>
           </div>
         </>
       ) : (
-        <div style={{ padding: '10px 14px', display: 'flex', gap: 8 }}>
-          <button
-            type="button"
-            onClick={goToSale}
+        <div style={{ padding: '10px 14px' }}>
+          <button type="button" onClick={goToSale}
             style={{
-              flex: 1, padding: '8px 0', borderRadius: 8, border: 'none',
-              backgroundColor: '#2a2a2a', color: '#ccc',
-              fontSize: 13, fontWeight: 500, cursor: 'pointer',
-              borderColor: '#444', borderWidth: 1, borderStyle: 'solid',
-            }}
-          >
+              width: '100%', padding: '9px 0', borderRadius: 10,
+              backgroundColor: '#2a2a2a', border: '1px solid #444',
+              color: '#ccc', fontSize: 13, fontWeight: 500, cursor: 'pointer',
+            }}>
             Open Order
           </button>
         </div>
@@ -320,10 +431,7 @@ function TableNode({
 
       {/* Popup on select */}
       {isSelected && !editMode && (
-        <TablePopup
-          table={table}
-          onClose={() => {}}
-        />
+        <TablePopup table={table} />
       )}
     </div>
   );
@@ -446,12 +554,17 @@ export default function TablesPage() {
   // Load tables — use admin API (no auth required)
   async function loadTables() {
     try {
-      const res = await fetch('/api/admin/tables', { cache: 'no-store' });
-      const data = await res.json() as {
+      const [tablesRes, layoutRes] = await Promise.all([
+        fetch('/api/admin/tables', { cache: 'no-store' }),
+        fetch('/api/admin/tables/layout', { cache: 'no-store' }),
+      ]);
+      const data = await tablesRes.json() as {
         ok: boolean;
         areas?: { id: number; name: string; locationId: number; isActive: boolean }[];
-        tables?: { id: number; name: string; capacity: number; status: string; isActive: boolean; areaId: number; activeOrderId?: number | null }[];
+        tables?: { id: number; name: string; capacity: number; status: string; isActive: boolean; areaId: number; activeOrderId?: number | null; activeOrder?: { id: number; status: string; totalAmount: string; openedAt: string; itemCount: number } | null }[];
       };
+      const layoutData = await layoutRes.json() as { ok: boolean; layouts?: TableLayout[] };
+
       if (data.ok && data.areas && data.tables) {
         const built: ApiArea[] = data.areas.map(a => ({
           id: a.id,
@@ -471,16 +584,13 @@ export default function TablesPage() {
 
         setAreas(built);
         setSelectedAreaId(prev => prev ?? built[0]?.id ?? null);
-        setLayouts(() => {
-          // Load saved positions from localStorage first
-          let saved = new Map<number, TableLayout>();
-          try {
-            const raw = localStorage.getItem('hms_table_layouts');
-            if (raw) saved = new Map(JSON.parse(raw) as Array<[number, TableLayout]>);
-          } catch { /* ignore */ }
 
-          const next = new Map(saved);
-          // Fill in any tables that don't have a saved position
+        // Load saved positions from DB, fallback to default for new tables
+        const savedMap = new Map<number, TableLayout>(
+          (layoutData.layouts ?? []).map(l => [l.id, l])
+        );
+        setLayouts(() => {
+          const next = new Map(savedMap);
           for (const area of built) {
             const defaults = generateDefaultLayout(area.tables);
             for (const d of defaults) {
