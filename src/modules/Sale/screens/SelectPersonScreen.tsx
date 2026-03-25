@@ -8,8 +8,8 @@ import { Users } from 'lucide-react';
 import { cn } from '@/core/lib/utils';
 import { AlphabetKeyboard } from '../components/AlphabetKeyboard';
 import { MemberList } from '../components/MemberCard';
-import { searchMembers } from '../constants';
 import { useSale } from '../context/SaleContext';
+import type { Member } from '../types';
 
 interface SelectPersonScreenProps {
   className?: string;
@@ -24,20 +24,40 @@ export function SelectPersonScreen({ className }: SelectPersonScreenProps) {
 
   const { searchQuery, selectedMember, isNonMember } = state;
 
-  // Local search state for keyboard
   const [localSearch, setLocalSearch] = React.useState(searchQuery);
+  const [allMembers, setAllMembers]   = React.useState<Member[]>([]);
+  const [loadError, setLoadError]     = React.useState(false);
 
-  // Get filtered members based on search
+  // Load members from DB on mount
+  React.useEffect(() => {
+    void (async () => {
+      try {
+        const res  = await fetch('/api/sale/members', { cache: 'no-store' });
+        const data = await res.json() as { ok: boolean; members?: Member[] };
+        if (data.ok && data.members) setAllMembers(data.members);
+        else setLoadError(true);
+      } catch { setLoadError(true); }
+    })();
+  }, []);
+
+  // Filter locally by search
   const filteredMembers = React.useMemo(() => {
-    return searchMembers(localSearch);
-  }, [localSearch]);
+    const q = localSearch.toLowerCase().trim();
+    if (!q) return allMembers;
+    return allMembers.filter(m =>
+      m.name.toLowerCase().includes(q) ||
+      m.firstName.toLowerCase().includes(q) ||
+      m.lastName.toLowerCase().includes(q) ||
+      m.accountNumber.toLowerCase().includes(q)
+    );
+  }, [allMembers, localSearch]);
 
-  // Find highlighted key (first char of first matching member not yet typed)
+  // Find highlighted key
   const highlightedKey = React.useMemo(() => {
-    if (!localSearch) return 'R'; // Default highlight from Figma
+    if (!localSearch) return filteredMembers[0]?.firstName?.[0]?.toUpperCase();
     const nextMatch = filteredMembers[0];
     if (nextMatch && nextMatch.name.length > localSearch.length) {
-      return nextMatch.name[localSearch.length];
+      return nextMatch.name[localSearch.length]?.toUpperCase();
     }
     return undefined;
   }, [localSearch, filteredMembers]);
@@ -120,11 +140,17 @@ export function SelectPersonScreen({ className }: SelectPersonScreenProps) {
 
       {/* Member List */}
       <div className="flex-1 overflow-y-auto">
-        <MemberList
-          members={filteredMembers}
-          selectedMemberId={selectedMember?.id || null}
-          onSelectMember={selectMember}
-        />
+        {loadError ? (
+          <div className="flex items-center justify-center py-10 text-red-400/70 text-sm">Failed to load members</div>
+        ) : allMembers.length === 0 ? (
+          <div className="flex items-center justify-center py-10 text-white/20 text-sm">Loading…</div>
+        ) : (
+          <MemberList
+            members={filteredMembers}
+            selectedMemberId={selectedMember?.id || null}
+            onSelectMember={selectMember}
+          />
+        )}
       </div>
 
       {/* Add Guest Option */}

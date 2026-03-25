@@ -16,10 +16,11 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     if (!id) return NextResponse.json({ ok: false, error: 'Invalid id' }, { status: 400 })
 
     const body = await request.json() as {
-      categoryId?: number
+      categoryId?:   number
       kdsStationId?: number | null
-      isActive?: boolean
-      basePrice?: string
+      isActive?:     boolean
+      basePrice?:    string
+      allergens?:    string[]
     }
 
     await prisma.menuItem.update({
@@ -29,6 +30,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
         ...(body.kdsStationId !== undefined && { kdsStationId: body.kdsStationId }),
         ...(body.isActive     !== undefined && { isActive: body.isActive }),
         ...(body.basePrice    !== undefined && { basePrice: body.basePrice }),
+        ...(body.allergens    !== undefined && { allergens: body.allergens }),
       },
     })
 

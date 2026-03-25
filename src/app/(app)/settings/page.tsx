@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from 'react'
+import Link from 'next/link'
 
 type StatsConfig = {
   daily: { revenue: boolean; tickets: boolean; avgOrderValue: boolean; events: boolean; popularItems: boolean; laborCost: boolean; foodCost: boolean; beverageCost: boolean }
@@ -49,7 +50,7 @@ const defaultSale: SaleConfig = {
 
 const defaultRsvp: RsvpConfig = { allowGuestOverride: true, showTablesOption: true, allowAllDayMenu: true, allowSocialLunch: true, allowMixed: true }
 
-const TABS = ['Stats', 'Sale', 'RSVP', 'Display', 'Tables', 'Filter', 'Log'] as const
+const TABS = ['Stats', 'Sale', 'RSVP', 'Display', 'Filter', 'Log'] as const
 type Tab = (typeof TABS)[number]
 
 function GreenCheck({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
@@ -207,10 +208,19 @@ function RsvpTab({ cfg, onChange }: { cfg: RsvpConfig; onChange: (c: RsvpConfig)
   )
 }
 
+const NAV_PAGES = [
+  { label: 'Users',     href: '/admin/users' },
+  { label: 'Members',   href: '/admin/members' },
+  { label: 'Locations', href: '/admin/locations' },
+  { label: 'Tables',    href: '/admin/tables' },
+  { label: 'Menu',      href: '/admin/menu' },
+] as const
+
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = React.useState<Tab>('Stats')
   const [saving, setSaving] = React.useState(false)
   const [saved, setSaved] = React.useState(false)
+  const [saveError, setSaveError] = React.useState<string | null>(null)
   const [statsConfig, setStatsConfig] = React.useState<StatsConfig>(defaultStats)
   const [saleConfig, setSaleConfig] = React.useState<SaleConfig>(defaultSale)
   const [rsvpConfig, setRsvpConfig] = React.useState<RsvpConfig>(defaultRsvp)
@@ -218,9 +228,26 @@ export default function SettingsPage() {
   React.useEffect(() => {
     void fetch('/api/admin/settings').then(r => r.json()).then((data: { ok: boolean; settings?: LocationSettings }) => {
       if (data.ok && data.settings) {
-        setStatsConfig(data.settings.statsConfig)
-        setSaleConfig(data.settings.saleConfig)
-        setRsvpConfig(data.settings.rsvpConfig)
+        // Merge with defaults so missing keys don't cause undefined errors
+        const loaded = data.settings.statsConfig as Partial<StatsConfig> | null
+        if (loaded) {
+          setStatsConfig({
+            daily:  { ...defaultStats.daily,  ...(loaded.daily  ?? {}) },
+            weekly: { ...defaultStats.weekly, ...(loaded.weekly ?? {}) },
+          })
+        }
+        if (data.settings.saleConfig) {
+          const s = data.settings.saleConfig as Partial<SaleConfig>
+          setSaleConfig({
+            ...defaultSale,
+            ...s,
+            memberDiscounts:    Array.isArray(s.memberDiscounts)    ? s.memberDiscounts    : defaultSale.memberDiscounts,
+            nonMemberDiscounts: Array.isArray(s.nonMemberDiscounts) ? s.nonMemberDiscounts : defaultSale.nonMemberDiscounts,
+          })
+        }
+        if (data.settings.rsvpConfig) {
+          setRsvpConfig({ ...defaultRsvp, ...(data.settings.rsvpConfig as Partial<RsvpConfig>) })
+        }
       }
     }).catch(() => {})
   }, [])
@@ -228,9 +255,26 @@ export default function SettingsPage() {
   async function handleSave() {
     try {
       setSaving(true)
-      await fetch('/api/admin/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ statsConfig, saleConfig, rsvpConfig }) })
-      setSaved(true); setTimeout(() => setSaved(false), 2000)
-    } finally { setSaving(false) }
+      setSaveError(null)
+      const res = await fetch('/api/admin/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ statsConfig, saleConfig, rsvpConfig }),
+      })
+      const data = await res.json() as { ok: boolean; error?: string }
+      if (!data.ok) {
+        setSaveError(data.error ?? 'Failed to save')
+        setTimeout(() => setSaveError(null), 4000)
+      } else {
+        setSaved(true)
+        setTimeout(() => setSaved(false), 2000)
+      }
+    } catch {
+      setSaveError('Network error')
+      setTimeout(() => setSaveError(null), 4000)
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -241,7 +285,8 @@ export default function SettingsPage() {
         </div>
         <h1 className="text-lg font-semibold">Settings</h1>
         <div className="ml-auto flex items-center gap-3">
-          {saved && <span className="text-xs text-emerald-400">Saved!</span>}
+          {saved      && <span className="text-xs text-emerald-400">Saved!</span>}
+          {saveError  && <span className="text-xs text-red-400">{saveError}</span>}
           <button type="button" onClick={() => void handleSave()} disabled={saving} className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-sm transition">{saving ? 'Saving...' : 'Save'}</button>
         </div>
       </div>
@@ -250,6 +295,13 @@ export default function SettingsPage() {
           {TABS.map(tab => (
             <button key={tab} type="button" onClick={() => setActiveTab(tab)}
               className={`px-4 py-1.5 rounded-md text-sm transition ${activeTab === tab ? 'bg-neutral-700 text-white font-medium' : 'text-white/50 hover:text-white/80'}`}>{tab}</button>
+          ))}
+          <div className="w-px bg-white/10 mx-1 self-stretch" />
+          {NAV_PAGES.map(page => (
+            <Link key={page.href} href={page.href}
+              className="px-4 py-1.5 rounded-md text-sm text-white/50 hover:text-white/80 hover:bg-neutral-800 transition">
+              {page.label}
+            </Link>
           ))}
         </div>
       </div>

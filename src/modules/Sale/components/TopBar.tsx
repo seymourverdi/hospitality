@@ -44,6 +44,8 @@ interface TopBarProps {
   skipSeating: boolean;
   onSkipSeatingToggle: () => void;
   selectedMember: Member | null;
+  showSkipSeating?: boolean;
+  showNonMember?: boolean;
   kitchenNotice?: {
     message: string;
     active: boolean;
@@ -59,6 +61,8 @@ export function TopBar({
   skipSeating,
   onSkipSeatingToggle,
   selectedMember,
+  showSkipSeating = true,
+  showNonMember = true,
   kitchenNotice,
   className,
 }: TopBarProps) {
@@ -90,16 +94,20 @@ export function TopBar({
       )}
 
       {/* Skip Seating Toggle */}
-      <div className="flex items-center gap-2">
-        <span className="text-white/60 text-sm whitespace-nowrap">Skip Seating</span>
-        <Toggle enabled={skipSeating} onChange={onSkipSeatingToggle} />
-      </div>
+      {showSkipSeating && (
+        <div className="flex items-center gap-2">
+          <span className="text-white/60 text-sm whitespace-nowrap">Skip Seating</span>
+          <Toggle enabled={skipSeating} onChange={onSkipSeatingToggle} />
+        </div>
+      )}
 
       {/* Non-Member Toggle */}
-      <div className="flex items-center gap-2">
-        <span className="text-white/60 text-sm whitespace-nowrap">Non-Member</span>
-        <Toggle enabled={isNonMember} onChange={onNonMemberToggle} />
-      </div>
+      {showNonMember && (
+        <div className="flex items-center gap-2">
+          <span className="text-white/60 text-sm whitespace-nowrap">Non-Member</span>
+          <Toggle enabled={isNonMember} onChange={onNonMemberToggle} />
+        </div>
+      )}
 
       {/* Member Badge (when member selected and not non-member) */}
       {selectedMember && !isNonMember && (

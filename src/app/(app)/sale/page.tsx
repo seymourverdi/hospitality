@@ -108,8 +108,38 @@ function SaleHydrator() {
   return null;
 }
 
+type SaleConfig = {
+  showSkipSeating: boolean;
+  showNonMember: boolean;
+  showAllModifiersByDefault: boolean;
+  noticeEnabled: boolean;
+  noticeMessage: string;
+};
+
+const DEFAULT_SALE_CONFIG: SaleConfig = {
+  showSkipSeating: true,
+  showNonMember: true,
+  showAllModifiersByDefault: true,
+  noticeEnabled: true,
+  noticeMessage: '',
+};
+
 function SalePageContent() {
   const router = useRouter();
+
+  const [saleConfig, setSaleConfig] = React.useState<SaleConfig>(DEFAULT_SALE_CONFIG);
+
+  React.useEffect(() => {
+    void (async () => {
+      try {
+        const res  = await fetch('/api/admin/settings', { cache: 'no-store' });
+        const data = await res.json() as { ok: boolean; settings?: { saleConfig?: Partial<SaleConfig> } };
+        if (data.ok && data.settings?.saleConfig) {
+          setSaleConfig(prev => ({ ...prev, ...data.settings!.saleConfig }));
+        }
+      } catch { /* keep defaults */ }
+    })();
+  }, []);
 
   const {
     state,
@@ -233,7 +263,13 @@ function SalePageContent() {
           skipSeating={skipSeating}
           onSkipSeatingToggle={toggleSkipSeating}
           selectedMember={selectedMember}
-          kitchenNotice={KITCHEN_NOTICE}
+          showSkipSeating={saleConfig.showSkipSeating}
+          showNonMember={saleConfig.showNonMember}
+          kitchenNotice={
+            saleConfig.noticeEnabled
+              ? { message: saleConfig.noticeMessage || KITCHEN_NOTICE.message, active: true }
+              : { message: '', active: false }
+          }
         />
 
         {submissionFeedback.status !== 'idle' && submissionFeedback.message ? (

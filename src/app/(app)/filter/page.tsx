@@ -448,7 +448,7 @@ export default function FilterPage() {
       const groupsData = await safeJson(groupsRes) as { ok: boolean; groups?: AllModGroup[] };
 
       if (itemsData.ok && itemsData.items) {
-        setItems(itemsData.items.map(i => ({ ...i, allergens: [] })));
+        setItems(itemsData.items.map(i => ({ ...i, allergens: (i as MenuItem).allergens ?? [] })));
         if (itemsData.locations?.[0]) setLocationId(itemsData.locations[0].id);
         if ((itemsData as { categories?: Category[] }).categories) setCategories((itemsData as { categories?: Category[] }).categories ?? []);
         if ((itemsData as { kdsStations?: KdsStation[] }).kdsStations) setKdsStations((itemsData as { kdsStations?: KdsStation[] }).kdsStations ?? []);
@@ -591,7 +591,7 @@ export default function FilterPage() {
               {/* Count */}
               <div className="flex items-center gap-1 text-xs text-white/50">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg>
-                Count
+                {item.modifierGroups.length > 0 ? item.modifierGroups.length : '—'}
               </div>
 
               {/* Mods */}
@@ -623,6 +623,7 @@ export default function FilterPage() {
       {allergensFor && (
         <AllergensModal item={allergensFor} onClose={allergens => {
           setItems(p => p.map(i => i.id === allergensFor.id ? { ...i, allergens } : i));
+          void patchItem(allergensFor.id, { allergens });
           setAllergensFor(null);
         }} />
       )}

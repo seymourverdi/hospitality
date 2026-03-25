@@ -15,7 +15,7 @@ export async function GET() {
         select: {
           id: true, locationId: true, categoryId: true, name: true, sku: true,
           description: true, basePrice: true, taxRate: true, isAlcohol: true,
-          isActive: true, kdsStationId: true,
+          isActive: true, allergens: true, kdsStationId: true,
           category:   { select: { id: true, name: true } },
           location:   { select: { id: true, name: true } },
           kdsStation: { select: { id: true, name: true } },

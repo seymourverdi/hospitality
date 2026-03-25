@@ -4,8 +4,14 @@ import { prisma } from '@/server/db'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-// Default locationId = 1 (single-location setup). In multi-location you'd pass locationId in query/body.
-const LOCATION_ID = 1
+async function getLocationId(): Promise<number | null> {
+  const loc = await prisma.restaurantLocation.findFirst({
+    where: { isActive: true },
+    select: { id: true },
+    orderBy: { id: 'asc' },
+  })
+  return loc?.id ?? null
+}
 
 const defaultStatsConfig = {
   daily: { revenue: true, tickets: true, avgOrderValue: true, events: false, popularItems: true, laborCost: true, foodCost: true, beverageCost: true },
@@ -29,18 +35,22 @@ const defaultLogConfig = {}
 
 export async function GET() {
   try {
+    const locationId = await getLocationId()
+    if (!locationId) {
+      return NextResponse.json({
+        ok: true,
+        settings: { statsConfig: defaultStatsConfig, saleConfig: defaultSaleConfig, rsvpConfig: defaultRsvpConfig },
+      })
+    }
+
     const settings = await prisma.locationSettings.findUnique({
-      where: { locationId: LOCATION_ID },
+      where: { locationId },
     })
 
     if (!settings) {
       return NextResponse.json({
         ok: true,
-        settings: {
-          statsConfig: defaultStatsConfig,
-          saleConfig: defaultSaleConfig,
-          rsvpConfig: defaultRsvpConfig,
-        },
+        settings: { statsConfig: defaultStatsConfig, saleConfig: defaultSaleConfig, rsvpConfig: defaultRsvpConfig },
       })
     }
 
@@ -60,6 +70,11 @@ export async function GET() {
 
 export async function PUT(request: Request) {
   try {
+    const locationId = await getLocationId()
+    if (!locationId) {
+      return NextResponse.json({ ok: false, error: 'No active location found' }, { status: 404 })
+    }
+
     const body = await request.json() as {
       statsConfig?: unknown
       saleConfig?: unknown
@@ -67,9 +82,9 @@ export async function PUT(request: Request) {
     }
 
     await prisma.locationSettings.upsert({
-      where: { locationId: LOCATION_ID },
+      where: { locationId },
       create: {
-        locationId: LOCATION_ID,
+        locationId,
         statsConfig: (body.statsConfig ?? defaultStatsConfig) as object,
         saleConfig: (body.saleConfig ?? defaultSaleConfig) as object,
         rsvpConfig: (body.rsvpConfig ?? defaultRsvpConfig) as object,

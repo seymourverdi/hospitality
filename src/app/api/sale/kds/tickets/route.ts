@@ -10,12 +10,14 @@ type UiTicketItem = {
   seat: number | null
   server: string | null
   completed: boolean
+  kdsStatus: 'PENDING' | 'IN_PROGRESS' | 'READY' | 'SERVED'
 }
 
 type UiTicket = {
   id: string
   orderId: number
   tableName: string | null
+  locationName: string | null
   course: string | null
   time: string
   elapsed: string
@@ -85,6 +87,12 @@ export async function GET() {
             name: true,
           },
         },
+        location: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
         createdByUser: {
           select: {
             firstName: true,
@@ -133,6 +141,7 @@ export async function GET() {
 
         const serverName = `${ticket.createdByUser.firstName} ${ticket.createdByUser.lastName}`.trim()
 
+        const kdsStatus = ticketItem.orderItem.kdsStatus as 'PENDING' | 'IN_PROGRESS' | 'READY' | 'SERVED'
         return {
           id: String(ticketItem.id),
           ticketItemId: String(ticketItem.id),
@@ -141,9 +150,8 @@ export async function GET() {
           allergy: null,
           seat: ticketItem.orderItem.seatNumber ?? null,
           server: serverName || null,
-          completed:
-            ticketItem.orderItem.kdsStatus === 'READY' ||
-            ticketItem.orderItem.kdsStatus === 'SERVED',
+          completed: kdsStatus === 'READY' || kdsStatus === 'SERVED',
+          kdsStatus,
         }
       })
 
@@ -151,6 +159,7 @@ export async function GET() {
         id: String(ticket.id),
         orderId: ticket.orderId,
         tableName: ticket.table?.name ?? null,
+        locationName: ticket.location?.name ?? null,
         course: null,
         time: formatClock(ticket.createdAt),
         elapsed: formatElapsed(ticket.createdAt),
