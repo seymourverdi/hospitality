@@ -91,6 +91,7 @@ interface SidebarNavProps {
   user?: {
     name: string;
     avatar?: string;
+    avatarColor?: string;
   };
 }
 
@@ -194,8 +195,11 @@ export function SidebarNav({ className, user }: SidebarNavProps) {
                     {user.avatar ? (
                       <AvatarImage src={user.avatar} alt={user.name} />
                     ) : null}
-                    <AvatarFallback className="bg-primary text-primary-foreground text-sm">
-                      {user.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                    <AvatarFallback
+                      style={user.avatarColor ? { backgroundColor: user.avatarColor, color: '#fff' } : undefined}
+                      className="text-sm"
+                    >
+                      {user.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
                   <span className="text-[10px] text-white/70 truncate max-w-14">

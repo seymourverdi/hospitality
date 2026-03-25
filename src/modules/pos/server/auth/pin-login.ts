@@ -38,6 +38,8 @@ export async function pinLogin(input: PinLoginInput): Promise<PosSession> {
     throw new PinAuthError('PIN is required', 400)
   }
 
+  console.log('[PIN-LOGIN] Attempting login with PIN length:', pin.length, '| PIN (masked):', pin.slice(0, 1) + '***')
+
   const user = await prisma.user.findFirst({
     where: {
       pinCode: pin,
@@ -53,8 +55,11 @@ export async function pinLogin(input: PinLoginInput): Promise<PosSession> {
   })
 
   if (!user) {
+    console.warn('[PIN-LOGIN] No active user found for given PIN')
     throw new PinAuthError('Invalid PIN', 401)
   }
+
+  console.log('[PIN-LOGIN] Found user:', user.firstName, user.lastName, '| id:', user.id, '| role:', user.role?.name)
 
   return {
     userId: String(user.id),

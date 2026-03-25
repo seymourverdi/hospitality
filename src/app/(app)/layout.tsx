@@ -2,31 +2,46 @@
 
 import * as React from 'react'
 import { AppShell, TopBar } from '@/components/layout'
-import { authFetch } from '@/lib/pos/auth-client'
 
-type MeResponse = {
-  user?: { id: number; firstName: string; lastName: string; roleId: number }
+interface MeUser {
+  id: number
+  firstName: string
+  lastName: string
+  roleId: number
+  avatarColor?: string | null
 }
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const [userName, setUserName] = React.useState('Admin')
+export default function AppLayout({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = React.useState<MeUser | null>(null)
 
-  React.useEffect(() => {
-    authFetch('/api/me', { method: 'GET' })
+  const fetchUser = React.useCallback(() => {
+    // Plain fetch — pos_session_v1 cookie is sent automatically
+    fetch('/api/me', { method: 'GET', cache: 'no-store' })
       .then(r => r.json())
-      .then((data: MeResponse) => {
-        if (data.user) {
-          setUserName(
-            `${data.user.firstName ?? ''} ${data.user.lastName ?? ''}`.trim() || 'Admin'
-          )
-        }
+      .then((data: { user?: MeUser }) => {
+        if (data.user) setUser(data.user)
       })
       .catch(() => {})
   }, [])
 
+  React.useEffect(() => {
+    fetchUser()
+    window.addEventListener('focus', fetchUser)
+    return () => window.removeEventListener('focus', fetchUser)
+  }, [fetchUser])
+
+  const name = user ? `${user.firstName} ${user.lastName}`.trim() || 'User' : 'User'
+
   return (
     <AppShell>
-      <TopBar user={{ name: userName, email: '', role: 'admin' }} />
+      <TopBar
+        user={{
+          name,
+          email: '',
+          role: 'admin',
+          avatarColor: user?.avatarColor ?? undefined,
+        }}
+      />
       {children}
     </AppShell>
   )
