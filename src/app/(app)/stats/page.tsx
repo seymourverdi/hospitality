@@ -4,30 +4,60 @@ import * as React from 'react'
 import { Info } from 'lucide-react'
 import { cn } from '@/core/lib/utils'
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
 type StatsConfig = {
-  daily:  { revenue: boolean; tickets: boolean; avgOrderValue: boolean; events: boolean; popularItems: boolean; laborCost: boolean; foodCost: boolean; beverageCost: boolean }
-  weekly: { revenue: boolean; tickets: boolean; avgOrderValue: boolean; events: boolean; popularItems: boolean; laborCost: boolean; foodCost: boolean; beverageCost: boolean }
+  daily: {
+    revenue: boolean
+    tickets: boolean
+    avgOrderValue: boolean
+    events: boolean
+    popularItems: boolean
+    laborCost: boolean
+    foodCost: boolean
+    beverageCost: boolean
+  }
+  weekly: {
+    revenue: boolean
+    tickets: boolean
+    avgOrderValue: boolean
+    events: boolean
+    popularItems: boolean
+    laborCost: boolean
+    foodCost: boolean
+    beverageCost: boolean
+  }
 }
 
-type RevenuePeriod   = { amount: number; change: number; positive: boolean }
-type TicketPeriod    = { count: number;  change: number; positive: boolean }
-type AovPeriod       = { amount: number; change: number; positive: boolean }
-type EventPeriod     = { count: number;  positive: boolean }
-type PopularItem     = { menuItemId: number; name: string; count: number }
-type ChartDay        = { date: string; food: number; beverage: number }
+type RevenuePeriod = { amount: number; change: number; positive: boolean }
+type TicketPeriod = { count: number; change: number; positive: boolean }
+type AovPeriod = { amount: number; change: number; positive: boolean }
+type EventPeriod = { count: number; positive: boolean }
+type PopularItem = { menuItemId: number; name: string; count: number }
+type ChartDay = { date: string; food: number; beverage: number }
 
 type StatsData = {
-  revenue:      { daily: RevenuePeriod; weekly: RevenuePeriod; monthly: RevenuePeriod; quarterly: RevenuePeriod }
-  tickets:      { daily: TicketPeriod;  weekly: TicketPeriod }
-  aov:          { daily: AovPeriod }
-  events:       { daily: EventPeriod;   weekly: EventPeriod }
-  popularItems: { daily: PopularItem[]; weekly: PopularItem[] }
-  chartData:    ChartDay[]
+  revenue: {
+    daily: RevenuePeriod
+    weekly: RevenuePeriod
+    monthly: RevenuePeriod
+    quarterly: RevenuePeriod
+  }
+  tickets: {
+    daily: TicketPeriod
+    weekly: TicketPeriod
+  }
+  aov: {
+    daily: AovPeriod
+  }
+  events: {
+    daily: EventPeriod
+    weekly: EventPeriod
+  }
+  popularItems: {
+    daily: PopularItem[]
+    weekly: PopularItem[]
+  }
+  chartData: ChartDay[]
 }
-
-// ─── Mini components ──────────────────────────────────────────────────────────
 
 function PeriodBadge({ label }: { label: string }) {
   return (
@@ -39,26 +69,36 @@ function PeriodBadge({ label }: { label: string }) {
 
 function ChangeBadge({ change, positive }: { change: number; positive: boolean }) {
   return (
-    <span className={cn(
-      'px-2 py-1 rounded text-xs font-semibold flex items-center gap-1',
-      positive ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
-    )}>
+    <span
+      className={cn(
+        'px-2 py-1 rounded text-xs font-semibold flex items-center gap-1',
+        positive ? 'bg-green-500 text-white' : 'bg-red-500 text-white',
+      )}
+    >
       {positive ? '↑' : '↓'} {change.toFixed(1)}%
     </span>
   )
 }
 
-function CardWrapper({ children, className }: { children: React.ReactNode; className?: string }) {
-  return (
-    <div className={cn('bg-[#1a1a1a] rounded-2xl p-5', className)}>
-      {children}
-    </div>
-  )
+function CardWrapper({
+  children,
+  className,
+}: {
+  children: React.ReactNode
+  className?: string
+}) {
+  return <div className={cn('bg-[#1a1a1a] rounded-2xl p-5', className)}>{children}</div>
 }
 
-// ─── Revenue Card ─────────────────────────────────────────────────────────────
-
-function RevenueCard({ title, period, data }: { title: string; period: string; data: RevenuePeriod }) {
+function RevenueCard({
+  title,
+  period,
+  data,
+}: {
+  title: string
+  period: string
+  data: RevenuePeriod
+}) {
   return (
     <CardWrapper>
       <div className="flex items-center justify-between mb-3">
@@ -69,19 +109,23 @@ function RevenueCard({ title, period, data }: { title: string; period: string; d
           <span className="text-white/80 text-sm font-medium">{title}</span>
           <PeriodBadge label={period} />
         </div>
-        <button className="text-white/30 hover:text-white/60"><Info className="h-4 w-4" /></button>
+        <button className="text-white/30 hover:text-white/60">
+          <Info className="h-4 w-4" />
+        </button>
       </div>
       <div className="flex items-end justify-between">
         <span className="text-3xl font-bold text-white">
-          ${data.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          $
+          {data.amount.toLocaleString('en-US', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}
         </span>
         <ChangeBadge change={data.change} positive={data.positive} />
       </div>
     </CardWrapper>
   )
 }
-
-// ─── Tickets Card ─────────────────────────────────────────────────────────────
 
 function TicketsCard({ period, data }: { period: string; data: TicketPeriod }) {
   return (
@@ -101,8 +145,6 @@ function TicketsCard({ period, data }: { period: string; data: TicketPeriod }) {
   )
 }
 
-// ─── AOV Card ─────────────────────────────────────────────────────────────────
-
 function AovCard({ data }: { data: AovPeriod }) {
   return (
     <CardWrapper className="flex-1">
@@ -114,16 +156,12 @@ function AovCard({ data }: { data: AovPeriod }) {
         <PeriodBadge label="Daily" />
       </div>
       <div className="flex items-end justify-between">
-        <span className="text-3xl font-bold text-white">
-          ${data.amount.toFixed(0)}
-        </span>
+        <span className="text-3xl font-bold text-white">${data.amount.toFixed(0)}</span>
         <ChangeBadge change={data.change} positive={data.positive} />
       </div>
     </CardWrapper>
   )
 }
-
-// ─── Events Card ──────────────────────────────────────────────────────────────
 
 function EventsCard({ data }: { data: EventPeriod }) {
   return (
@@ -137,16 +175,17 @@ function EventsCard({ data }: { data: EventPeriod }) {
       </div>
       <div className="flex items-end justify-between">
         <span className="text-3xl font-bold text-white">{data.count}</span>
-        <span className="px-2 py-1 rounded text-xs font-semibold bg-white/10 text-white/50">—</span>
+        <span className="px-2 py-1 rounded text-xs font-semibold bg-white/10 text-white/50">
+          —
+        </span>
       </div>
     </CardWrapper>
   )
 }
 
-// ─── Popular Items Card ───────────────────────────────────────────────────────
-
 function PopularItemsCard({ period, items }: { period: string; items: PopularItem[] }) {
   const max = items[0]?.count ?? 1
+
   return (
     <CardWrapper>
       <div className="flex items-center justify-between mb-4">
@@ -159,6 +198,7 @@ function PopularItemsCard({ period, items }: { period: string; items: PopularIte
         </div>
         <button className="text-xs text-white/40 hover:text-white/70 transition">See All</button>
       </div>
+
       {items.length === 0 ? (
         <p className="text-white/30 text-sm text-center py-4">No data</p>
       ) : (
@@ -185,10 +225,14 @@ function PopularItemsCard({ period, items }: { period: string; items: PopularIte
   )
 }
 
-// ─── Bar Chart Card ───────────────────────────────────────────────────────────
-
 function BarChartCard({
-  title, color, data, valueKey, total, change, positive,
+  title,
+  color,
+  data,
+  valueKey,
+  total,
+  change,
+  positive,
 }: {
   title: string
   color: string
@@ -198,13 +242,12 @@ function BarChartCard({
   change: number
   positive: boolean
 }) {
-  const max = Math.max(...data.map(d => d[valueKey]), 1)
-  // Show last 7 days or all if fewer
+  const max = Math.max(...data.map((d) => d[valueKey]), 1)
   const visible = data.slice(-7)
 
   const dayLabel = (dateStr: string) => {
     const d = new Date(dateStr)
-    return ['S','M','T','W','T','F','S'][d.getDay()]
+    return ['S', 'M', 'T', 'W', 'T', 'F', 'S'][d.getDay()]
   }
 
   return (
@@ -217,19 +260,19 @@ function BarChartCard({
         <button className="text-xs text-white/40 hover:text-white/70 transition">See All</button>
       </div>
 
-      {/* Bar chart */}
       <div className="flex items-end gap-1 h-16 mb-4">
         {visible.map((d, i) => {
           const val = d[valueKey]
           const height = max > 0 ? Math.max((val / max) * 100, val > 0 ? 8 : 2) : 2
           const isLast = i === visible.length - 1
+
           return (
             <div key={d.date} className="flex-1 flex flex-col items-center justify-end gap-1">
               <div
                 className="w-full rounded-sm transition-all"
                 style={{
                   height: `${height}%`,
-                  backgroundColor: isLast ? color : color + '66',
+                  backgroundColor: isLast ? color : `${color}66`,
                   minHeight: '2px',
                 }}
               />
@@ -249,24 +292,38 @@ function BarChartCard({
   )
 }
 
-// ─── Skeleton ────────────────────────────────────────────────────────────────
-
 function Skeleton({ className }: { className?: string }) {
   return <div className={cn('bg-white/5 animate-pulse rounded-2xl', className)} />
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
-
 const DEFAULT_STATS_CONFIG: StatsConfig = {
-  daily:  { revenue: true, tickets: true, avgOrderValue: true, events: false, popularItems: true, laborCost: false, foodCost: true, beverageCost: true },
-  weekly: { revenue: true, tickets: true, avgOrderValue: true, events: false, popularItems: true, laborCost: false, foodCost: true, beverageCost: true },
+  daily: {
+    revenue: true,
+    tickets: true,
+    avgOrderValue: true,
+    events: false,
+    popularItems: true,
+    laborCost: false,
+    foodCost: true,
+    beverageCost: true,
+  },
+  weekly: {
+    revenue: true,
+    tickets: true,
+    avgOrderValue: true,
+    events: false,
+    popularItems: true,
+    laborCost: false,
+    foodCost: true,
+    beverageCost: true,
+  },
 }
 
 export default function StatsPage() {
-  const [stats, setStats]   = React.useState<StatsData | null>(null)
-  const [cfg, setCfg]       = React.useState<StatsConfig>(DEFAULT_STATS_CONFIG)
+  const [stats, setStats] = React.useState<StatsData | null>(null)
+  const [cfg, setCfg] = React.useState<StatsConfig>(DEFAULT_STATS_CONFIG)
   const [loading, setLoading] = React.useState(true)
-  const [error, setError]   = React.useState<string | null>(null)
+  const [error, setError] = React.useState<string | null>(null)
 
   React.useEffect(() => {
     void (async () => {
@@ -275,12 +332,38 @@ export default function StatsPage() {
           fetch('/api/admin/stats'),
           fetch('/api/admin/settings'),
         ])
-        const statsJson    = await statsRes.json() as { ok: boolean; stats?: StatsData; error?: string }
-        const settingsJson = await settingsRes.json() as { ok: boolean; settings?: { statsConfig: StatsConfig } }
 
-        if (!statsJson.ok) throw new Error(statsJson.error ?? 'Failed to load stats')
-        if (statsJson.stats) setStats(statsJson.stats)
-        if (settingsJson.ok && settingsJson.settings?.statsConfig) setCfg(settingsJson.settings.statsConfig)
+        const statsJson = (await statsRes.json()) as {
+          ok: boolean
+          stats?: StatsData
+          error?: string
+        }
+
+        const settingsJson = (await settingsRes.json()) as {
+          ok: boolean
+          settings?: { statsConfig: Partial<StatsConfig> | StatsConfig }
+        }
+
+        if (!statsJson.ok) {
+          throw new Error(statsJson.error ?? 'Failed to load stats')
+        }
+
+        if (statsJson.stats) {
+          setStats(statsJson.stats)
+        }
+
+        if (settingsJson.ok && settingsJson.settings?.statsConfig) {
+          setCfg({
+            daily: {
+              ...DEFAULT_STATS_CONFIG.daily,
+              ...(settingsJson.settings.statsConfig.daily ?? {}),
+            },
+            weekly: {
+              ...DEFAULT_STATS_CONFIG.weekly,
+              ...(settingsJson.settings.statsConfig.weekly ?? {}),
+            },
+          })
+        }
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Unknown error')
       } finally {
@@ -294,16 +377,24 @@ export default function StatsPage() {
       <div className="p-4 space-y-4">
         <Skeleton className="h-8 w-48" />
         <div className="grid grid-cols-2 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-28" />)}
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-28" />
+          ))}
         </div>
         <div className="grid grid-cols-2 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24" />)}
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-24" />
+          ))}
         </div>
         <div className="grid grid-cols-2 gap-4">
-          {Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-40" />)}
+          {Array.from({ length: 2 }).map((_, i) => (
+            <Skeleton key={i} className="h-40" />
+          ))}
         </div>
         <div className="grid grid-cols-3 gap-4 pb-4">
-          {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-36" />)}
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-36" />
+          ))}
         </div>
       </div>
     )
@@ -324,21 +415,48 @@ export default function StatsPage() {
     )
   }
 
-  const { revenue, tickets, aov, events, popularItems, chartData } = stats
-  const d = cfg.daily
-  const w = cfg.weekly
+  const revenue = stats.revenue ?? {
+    daily: { amount: 0, change: 0, positive: true },
+    weekly: { amount: 0, change: 0, positive: true },
+    monthly: { amount: 0, change: 0, positive: true },
+    quarterly: { amount: 0, change: 0, positive: true },
+  }
 
-  // Totals for chart cards (sum of current month)
-  const foodTotal     = chartData.reduce((s, x) => s + x.food, 0)
+  const tickets = stats.tickets ?? {
+    daily: { count: 0, change: 0, positive: true },
+    weekly: { count: 0, change: 0, positive: true },
+  }
+
+  const aov = stats.aov ?? {
+    daily: { amount: 0, change: 0, positive: true },
+  }
+
+  const events = stats.events ?? {
+    daily: { count: 0, positive: true },
+    weekly: { count: 0, positive: true },
+  }
+
+  const popularItems = stats.popularItems ?? {
+    daily: [],
+    weekly: [],
+  }
+
+  const chartData = stats.chartData ?? []
+
+  const d = cfg?.daily ?? DEFAULT_STATS_CONFIG.daily
+  const w = cfg?.weekly ?? DEFAULT_STATS_CONFIG.weekly
+
+  const foodTotal = chartData.reduce((s, x) => s + x.food, 0)
   const beverageTotal = chartData.reduce((s, x) => s + x.beverage, 0)
 
-  // Show revenue section if any revenue toggle is on
-  const showRevenue = d.revenue || w.revenue
+  const showRevenue = Boolean(d?.revenue || w?.revenue)
+  const showTicketsRow = Boolean(d?.tickets || w?.tickets || d?.avgOrderValue || d?.events)
+  const showPopularItems = Boolean(d?.popularItems || w?.popularItems)
+  const showCosts = Boolean(d?.foodCost || d?.beverageCost)
+  const showEmptyState = !showRevenue && !showTicketsRow && !showPopularItems && !showCosts
 
   return (
     <div className="min-h-screen p-4 space-y-4 pb-8">
-
-      {/* Header */}
       <div className="flex items-center justify-between mb-2">
         <h1 className="text-lg font-semibold text-white">Dashboard</h1>
         <div className="flex items-center gap-2 text-xs text-white/40">
@@ -349,41 +467,48 @@ export default function StatsPage() {
         </div>
       </div>
 
-      {/* ── Revenue cards ─────────────────────────────────────────────────── */}
       {showRevenue && (
         <div className="grid grid-cols-2 gap-3">
-          {d.revenue  && <RevenueCard title="Revenue" period="Daily"    data={revenue.daily} />}
-          {w.revenue  && <RevenueCard title="Revenue" period="Weekly"   data={revenue.weekly} />}
-          {(d.revenue || w.revenue) && <RevenueCard title="Revenue" period="Monthly"  data={revenue.monthly} />}
-          {(d.revenue || w.revenue) && <RevenueCard title="Revenue" period="Quarter"  data={revenue.quarterly} />}
+          {d?.revenue && <RevenueCard title="Revenue" period="Daily" data={revenue.daily} />}
+          {w?.revenue && <RevenueCard title="Revenue" period="Weekly" data={revenue.weekly} />}
+          {(d?.revenue || w?.revenue) && (
+            <RevenueCard title="Revenue" period="Monthly" data={revenue.monthly} />
+          )}
+          {(d?.revenue || w?.revenue) && (
+            <RevenueCard title="Revenue" period="Quarter" data={revenue.quarterly} />
+          )}
         </div>
       )}
 
-      {/* ── Tickets + AOV + Events row ────────────────────────────────────── */}
-      {(d.tickets || w.tickets || d.avgOrderValue || d.events) && (
+      {showTicketsRow && (
         <div className="flex gap-3 flex-wrap">
-          {d.tickets      && <TicketsCard period="Daily"  data={tickets.daily} />}
-          {w.tickets      && <TicketsCard period="Weekly" data={tickets.weekly} />}
-          {d.avgOrderValue && <AovCard    data={aov.daily} />}
-          {d.events        && <EventsCard data={events.daily} />}
+          {d?.tickets && <TicketsCard period="Daily" data={tickets.daily} />}
+          {w?.tickets && <TicketsCard period="Weekly" data={tickets.weekly} />}
+          {d?.avgOrderValue && <AovCard data={aov.daily} />}
+          {d?.events && <EventsCard data={events.daily} />}
         </div>
       )}
 
-      {/* ── Popular Items ─────────────────────────────────────────────────── */}
-      {(d.popularItems || w.popularItems) && (
-        <div className={cn('grid gap-3', d.popularItems && w.popularItems ? 'grid-cols-2' : 'grid-cols-1')}>
-          {d.popularItems && <PopularItemsCard period="Daily"  items={popularItems.daily} />}
-          {w.popularItems && <PopularItemsCard period="Weekly" items={popularItems.weekly} />}
+      {showPopularItems && (
+        <div
+          className={cn(
+            'grid gap-3',
+            d?.popularItems && w?.popularItems ? 'grid-cols-2' : 'grid-cols-1',
+          )}
+        >
+          {d?.popularItems && <PopularItemsCard period="Daily" items={popularItems.daily} />}
+          {w?.popularItems && <PopularItemsCard period="Weekly" items={popularItems.weekly} />}
         </div>
       )}
 
-      {/* ── Cost charts ───────────────────────────────────────────────────── */}
-      {(d.foodCost || d.beverageCost) && (
-        <div className={cn(
-          'grid gap-3',
-          d.foodCost && d.beverageCost ? 'grid-cols-2' : 'grid-cols-1'
-        )}>
-          {d.foodCost && (
+      {showCosts && (
+        <div
+          className={cn(
+            'grid gap-3',
+            d?.foodCost && d?.beverageCost ? 'grid-cols-2' : 'grid-cols-1',
+          )}
+        >
+          {d?.foodCost && (
             <BarChartCard
               title="Food Cost"
               color="#a78bfa"
@@ -394,7 +519,8 @@ export default function StatsPage() {
               positive={false}
             />
           )}
-          {d.beverageCost && (
+
+          {d?.beverageCost && (
             <BarChartCard
               title="Beverage Cost"
               color="#f472b6"
@@ -408,8 +534,7 @@ export default function StatsPage() {
         </div>
       )}
 
-      {/* Empty state */}
-      {!showRevenue && !d.tickets && !w.tickets && !d.popularItems && !w.popularItems && !d.foodCost && !d.beverageCost && (
+      {showEmptyState && (
         <div className="flex flex-col items-center justify-center py-20 gap-3">
           <span className="text-4xl">📊</span>
           <p className="text-white/40 text-sm">No stats widgets enabled</p>

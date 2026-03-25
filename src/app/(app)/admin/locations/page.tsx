@@ -202,7 +202,7 @@ export default function AdminLocationsPage() {
                   value={form.phone}
                   onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))}
                   className="w-full h-11 rounded-lg bg-neutral-950 border border-white/10 px-3 outline-none"
-                  placeholder="+380..."
+                  placeholder="+1..."
                 />
               </div>
 
