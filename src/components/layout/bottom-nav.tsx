@@ -1,10 +1,8 @@
-// City Club HMS - Bottom Navigation
-// Mobile bottom navigation bar
-
 'use client';
 
 import * as React from 'react';
 import Link from 'next/link';
+import type { Route } from 'next';
 import { usePathname } from 'next/navigation';
 import {
   BarChart3,
@@ -13,6 +11,10 @@ import {
   Monitor,
   LayoutGrid,
   MoreHorizontal,
+  Filter,
+  FileText,
+  Users,
+  LogOut,
 } from 'lucide-react';
 import { cn } from '@/core/lib/utils';
 import {
@@ -22,23 +24,25 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
-import { Filter, FileText, Settings, Users, LogOut } from 'lucide-react';
 
-// Primary navigation items (shown in bottom bar)
-const primaryNavItems = [
-  { href: '/stats' as const, label: 'Stats', icon: BarChart3 },
-  { href: '/sale' as const, label: 'Sale', icon: ShoppingCart },
-  { href: '/rsvp' as const, label: 'RSVP', icon: CalendarDays },
-  { href: '/display' as const, label: 'Display', icon: Monitor },
-  { href: '/tables' as const, label: 'Tables', icon: LayoutGrid },
+type NavItem = {
+  href: Route;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+};
+
+const primaryNavItems: NavItem[] = [
+  { href: '/stats', label: 'Stats', icon: BarChart3 },
+  { href: '/sale', label: 'Sale', icon: ShoppingCart },
+  { href: '/rsvp', label: 'RSVP', icon: CalendarDays },
+  { href: '/display', label: 'Display', icon: Monitor },
+  { href: '/tables', label: 'Tables', icon: LayoutGrid },
 ];
 
-// Secondary navigation items (in More menu)
-const moreNavItems = [
-  { href: '/filter' as const, label: 'Filter', icon: Filter },
-  { href: '/log' as const, label: 'Log', icon: FileText },
-  { href: '/settings' as const, label: 'Settings', icon: Settings },
-  { href: '/admin' as const, label: 'Admin', icon: Users },
+const moreNavItems: NavItem[] = [
+  { href: '/filter', label: 'Filter', icon: Filter },
+  { href: '/log', label: 'Log', icon: FileText },
+  { href: '/admin', label: 'Admin', icon: Users },
 ];
 
 interface BottomNavProps {
@@ -82,7 +86,6 @@ export function BottomNav({ className }: BottomNavProps) {
           );
         })}
 
-        {/* More Menu */}
         <Sheet open={isMoreOpen} onOpenChange={setIsMoreOpen}>
           <SheetTrigger asChild>
             <button
@@ -127,12 +130,10 @@ export function BottomNav({ className }: BottomNavProps) {
               })}
             </div>
 
-            {/* Logout */}
             <div className="border-t border-border pt-4">
               <button
                 onClick={() => {
                   setIsMoreOpen(false);
-                  // TODO: Implement logout
                   console.log('Logout clicked');
                 }}
                 className={cn(

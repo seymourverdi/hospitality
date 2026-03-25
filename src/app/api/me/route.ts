@@ -27,7 +27,7 @@ export async function GET() {
 
     console.log('[ME] session userId:', session.userId, '→ user:', user ? `${user.firstName} ${user.lastName} (id:${user.id})` : 'NOT FOUND')
 
-    return NextResponse.json({ user });
+    return NextResponse.json({ user, role: session.role });
   } catch (e) {
     console.error('[ME] error', e)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

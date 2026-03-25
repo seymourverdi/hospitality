@@ -21,6 +21,19 @@ type ApiArea  = { id: number; name: string };
 
 type TableLayout = { id: number; x: number; y: number; shape: 'square' | 'round'; seats: number };
 
+type RsvpConfig = {
+  allowGuestOverride: boolean
+  showTablesOption: boolean
+  allowAllDayMenu: boolean
+  allowSocialLunch: boolean
+  allowMixed: boolean
+}
+
+const DEFAULT_RSVP_CONFIG: RsvpConfig = {
+  allowGuestOverride: true, showTablesOption: true,
+  allowAllDayMenu: true, allowSocialLunch: true, allowMixed: true,
+}
+
 // ─── Status colours ───────────────────────────────────────────────────────────
 
 const STATUS_COLOR: Record<string, string> = {
@@ -157,13 +170,14 @@ function FloorMap({ tables, layouts, areas, selectedTableIds, occupiedTableIds, 
 
 // ─── New Reservation form (right panel) ──────────────────────────────────────
 
-function NewReservationPanel({ step, onStepChange, tables, layouts, areas, onCreated }: {
+function NewReservationPanel({ step, onStepChange, tables, layouts, areas, onCreated, rsvpConfig = DEFAULT_RSVP_CONFIG }: {
   step: 1 | 2;
   onStepChange: (s: 1 | 2) => void;
   tables: ApiTable[];
   layouts: Map<number, TableLayout>;
   areas: ApiArea[];
   onCreated: () => void;
+  rsvpConfig?: RsvpConfig;
 }) {
   const [firstName, setFirstName] = React.useState('');
   const [lastName, setLastName]   = React.useState('');
@@ -207,6 +221,11 @@ function NewReservationPanel({ step, onStepChange, tables, layouts, areas, onCre
   async function handleSubmit() {
     try {
       setSaving(true); setError(null);
+      // Validate: if guest override is not allowed, name is required
+      if (!rsvpConfig.allowGuestOverride && !firstName.trim()) {
+        setError('Member name is required (Guest override is disabled)')
+        return
+      }
       // Use current time if not provided
       const dateStr = date || new Date().toISOString().split('T')[0];
       const timeStr = time || '12:00';
@@ -268,15 +287,16 @@ function NewReservationPanel({ step, onStepChange, tables, layouts, areas, onCre
               style={{ flex: 1, background: 'none', border: 'none', color: '#fff', fontSize: 13, outline: 'none' }} />
           </div>
 
-          {/* Member name */}
-          <div style={fieldStyle}>
+          {/* Member / Guest name */}
+          <div style={{ ...fieldStyle, border: `1px solid ${!rsvpConfig.allowGuestOverride && !firstName.trim() ? '#ef444466' : '#3a3a3a'}` }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
-            <input value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="Member Name"
-              style={{ flex: 1, background: 'none', border: 'none', color: '#fff', fontSize: 13, outline: 'none', }} />
+            <input value={firstName} onChange={e => setFirstName(e.target.value)}
+              placeholder={rsvpConfig.allowGuestOverride ? 'Member Name (optional)' : 'Member Name (required)'}
+              style={{ flex: 1, background: 'none', border: 'none', color: '#fff', fontSize: 13, outline: 'none' }} />
           </div>
 
           {/* Time + Guests + Table */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: rsvpConfig.showTablesOption ? '1fr 1fr 1fr' : '1fr 1fr', gap: 8 }}>
             <div style={{ ...fieldStyle, padding: '0 10px' }}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
               <input type="time" value={time} onChange={e => setTime(e.target.value)}
@@ -287,11 +307,13 @@ function NewReservationPanel({ step, onStepChange, tables, layouts, areas, onCre
               <input type="number" min="1" max="20" value={guests} onChange={e => setGuests(e.target.value)}
                 style={{ flex: 1, background: 'none', border: 'none', color: '#fff', fontSize: 12, outline: 'none', width: 0 }} />
             </div>
-            <button type="button" onClick={() => { void loadOccupiedTables(date, time); onStepChange(2); }}
-              style={{ ...fieldStyle, padding: '0 10px', cursor: 'pointer', border: `1px solid ${selectedTable ? '#22c55e' : '#3a3a3a'}`, backgroundColor: selectedTable ? '#1e3a2a' : '#2a2a2a', color: selectedTable ? '#4ade80' : '#666', fontSize: 11 }}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
-              {selectedTable ? selectedTable.name : 'Table'}
-            </button>
+            {rsvpConfig.showTablesOption && (
+              <button type="button" onClick={() => { void loadOccupiedTables(date, time); onStepChange(2); }}
+                style={{ ...fieldStyle, padding: '0 10px', cursor: 'pointer', border: `1px solid ${selectedTable ? '#22c55e' : '#3a3a3a'}`, backgroundColor: selectedTable ? '#1e3a2a' : '#2a2a2a', color: selectedTable ? '#4ade80' : '#666', fontSize: 11 }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+                {selectedTable ? selectedTable.name : 'Table'}
+              </button>
+            )}
           </div>
 
           {/* Notes */}
@@ -301,21 +323,28 @@ function NewReservationPanel({ step, onStepChange, tables, layouts, areas, onCre
               style={{ flex: 1, background: 'none', border: 'none', color: '#fff', fontSize: 13, outline: 'none' }} />
           </div>
 
-          {/* Service type */}
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-            {(['ALL_DAY_MENU','SOCIAL_LUNCH','MIXED'] as const).map(val => {
-              const labels: Record<string, string> = { ALL_DAY_MENU: 'All-Day Menu', SOCIAL_LUNCH: 'Social Lunch', MIXED: 'Mixed' };
-              return (
-                <label key={val} style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', fontSize: 12, color: '#aaa' }}>
-                  <div onClick={() => toggleService(val)}
-                    style={{ width: 16, height: 16, borderRadius: 4, backgroundColor: serviceType.includes(val) ? '#22c55e' : '#333', border: '1px solid #555', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    {serviceType.includes(val) && <svg width="9" height="7" viewBox="0 0 9 7" fill="none"><path d="M1 3.5l2 2L8 1" stroke="white" strokeWidth="1.5" strokeLinecap="round"/></svg>}
-                  </div>
-                  {labels[val]}
-                </label>
-              );
-            })}
-          </div>
+          {/* Service type — only show types allowed by rsvpConfig */}
+          {(() => {
+            const allTypes = [
+              { val: 'ALL_DAY_MENU' as const, label: 'All-Day Menu', allowed: rsvpConfig.allowAllDayMenu },
+              { val: 'SOCIAL_LUNCH' as const, label: 'Social Lunch', allowed: rsvpConfig.allowSocialLunch },
+              { val: 'MIXED'        as const, label: 'Mixed',         allowed: rsvpConfig.allowMixed },
+            ].filter(t => t.allowed)
+            if (allTypes.length === 0) return null
+            return (
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                {allTypes.map(({ val, label }) => (
+                  <label key={val} style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', fontSize: 12, color: '#aaa' }}>
+                    <div onClick={() => toggleService(val)}
+                      style={{ width: 16, height: 16, borderRadius: 4, backgroundColor: serviceType.includes(val) ? '#22c55e' : '#333', border: '1px solid #555', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      {serviceType.includes(val) && <svg width="9" height="7" viewBox="0 0 9 7" fill="none"><path d="M1 3.5l2 2L8 1" stroke="white" strokeWidth="1.5" strokeLinecap="round"/></svg>}
+                    </div>
+                    {label}
+                  </label>
+                ))}
+              </div>
+            )
+          })()}
 
           {error && <p style={{ fontSize: 11, color: '#f87171', margin: 0 }}>{error}</p>}
         </div>
@@ -335,9 +364,11 @@ function NewReservationPanel({ step, onStepChange, tables, layouts, areas, onCre
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, fontSize: 11 }}>
           <div style={{ width: 20, height: 20, borderRadius: '50%', backgroundColor: '#22c55e', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 10, flexShrink: 0 }}>1</div>
           <span style={{ color: step === 1 ? '#ccc' : '#555' }}>Enter Details</span>
-          <span style={{ color: '#333', margin: '0 2px' }}>·····</span>
-          <div style={{ width: 20, height: 20, borderRadius: '50%', backgroundColor: step === 2 ? '#22c55e' : '#333', color: step === 2 ? '#fff' : '#666', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 10, flexShrink: 0 }}>2</div>
-          <span style={{ color: step === 2 ? '#ccc' : '#555' }}>Select Table</span>
+          {rsvpConfig.showTablesOption && <>
+            <span style={{ color: '#333', margin: '0 2px' }}>·····</span>
+            <div style={{ width: 20, height: 20, borderRadius: '50%', backgroundColor: step === 2 ? '#22c55e' : '#333', color: step === 2 ? '#fff' : '#666', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 10, flexShrink: 0 }}>2</div>
+            <span style={{ color: step === 2 ? '#ccc' : '#555' }}>Select Table</span>
+          </>}
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, color: '#888' }}>
             <span style={{ fontWeight: 700, color: '#fff' }}>{guests}</span>
             {date && <span>{new Date(date + 'T00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>}
@@ -347,11 +378,12 @@ function NewReservationPanel({ step, onStepChange, tables, layouts, areas, onCre
 
         {/* Buttons */}
         <div style={{ display: 'flex', gap: 8 }}>
-          <button type="button" onClick={() => onStepChange(step === 2 ? 1 : 1)}
+          <button type="button" onClick={() => onStepChange(1)}
             style={{ padding: '9px 16px', borderRadius: 8, backgroundColor: '#2a2a2a', border: '1px solid #3a3a3a', color: '#aaa', fontSize: 12, cursor: 'pointer' }}>
             ← Back
           </button>
-          {step === 1 ? (
+          {/* If tables disabled OR already on step 1 without tables: show Submit directly */}
+          {step === 1 && rsvpConfig.showTablesOption ? (
             <button type="button" onClick={() => { void loadOccupiedTables(date, time); onStepChange(2); }}
               style={{ flex: 1, padding: '9px 0', borderRadius: 8, backgroundColor: '#22c55e', border: 'none', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
               Next →
@@ -390,18 +422,24 @@ export default function RsvpPage() {
   const [selectedIds, setSelectedIds] = React.useState<number[]>([]);
   const [step, setStep] = React.useState<1|2>(1);
   const [statusMenu, setStatusMenu] = React.useState<{ id: number; x: number; y: number } | null>(null);
+  const [rsvpConfig, setRsvpConfig] = React.useState<RsvpConfig>(DEFAULT_RSVP_CONFIG);
 
   async function loadAll() {
     try {
-      const [rsvpRes, tablesRes, layoutRes] = await Promise.all([
+      const [rsvpRes, tablesRes, layoutRes, settingsRes] = await Promise.all([
         fetch('/api/admin/reservations', { cache: 'no-store' }),
         fetch('/api/admin/tables', { cache: 'no-store' }),
         fetch('/api/admin/tables/layout', { cache: 'no-store' }),
+        fetch('/api/admin/settings', { cache: 'no-store' }),
       ]);
 
-      const rsvpData   = await safeJson(rsvpRes)   as { ok: boolean; reservations?: Reservation[] };
-      const tablesData = await safeJson(tablesRes)  as { ok: boolean; areas?: ApiArea[]; tables?: ApiTable[] };
-      const layoutData = await safeJson(layoutRes)  as { ok: boolean; layouts?: TableLayout[] };
+      const rsvpData      = await safeJson(rsvpRes)      as { ok: boolean; reservations?: Reservation[] };
+      const tablesData    = await safeJson(tablesRes)    as { ok: boolean; areas?: ApiArea[]; tables?: ApiTable[] };
+      const layoutData    = await safeJson(layoutRes)    as { ok: boolean; layouts?: TableLayout[] };
+      const settingsData  = await safeJson(settingsRes)  as { ok: boolean; settings?: { rsvpConfig?: Partial<RsvpConfig> } };
+      if (settingsData.ok && settingsData.settings?.rsvpConfig) {
+        setRsvpConfig(prev => ({ ...prev, ...settingsData.settings!.rsvpConfig }));
+      }
 
       if (rsvpData.ok) setReservations(rsvpData.reservations ?? []);
       if (tablesData.ok) {
@@ -607,6 +645,7 @@ export default function RsvpPage() {
           layouts={layouts}
           areas={areas}
           onCreated={() => void loadAll()}
+          rsvpConfig={rsvpConfig}
         />
       {/* Status context menu */}
       {statusMenu && (

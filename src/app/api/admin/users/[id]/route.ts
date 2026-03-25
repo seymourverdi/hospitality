@@ -40,6 +40,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     const email = body.email ? String(body.email).trim() : null
     const phone = body.phone ? String(body.phone).trim() : null
     const isActive = Boolean(body.isActive ?? true)
+    const avatarColor = body.avatarColor ? String(body.avatarColor).trim() : null
 
     if (!locationId) {
       return NextResponse.json(
@@ -82,6 +83,7 @@ export async function PATCH(request: Request, { params }: RouteContext) {
         email,
         phone,
         isActive,
+        avatarColor,
       },
       select: {
         id: true,

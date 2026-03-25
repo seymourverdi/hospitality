@@ -1,35 +1,79 @@
-import { NextResponse } from "next/server";
-import { getPosSession } from "@/modules/pos/server/session/pos-session";
-import { prisma } from "@/server/db/prisma";
+'use client'
 
-export async function GET() {
-  try {
-    const session = await getPosSession();
+import * as React from 'react'
+import { cn } from '@/core/lib/utils'
+import { SidebarNav } from './sidebar-nav'
+import { BottomNav } from './bottom-nav'
+import { Toaster } from '@/components/ui/toaster'
 
-    if (!session) {
-      console.warn('[ME] No pos_session_v1 cookie found')
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+interface AppShellProps {
+  children: React.ReactNode
+  className?: string
+}
+
+type MeUser = {
+  id: number
+  firstName: string
+  lastName: string
+  roleId: number
+  locationId: number
+  avatarColor?: string | null
+}
+
+type MeResponse = {
+  user?: MeUser
+}
+
+export function AppShell({ children, className }: AppShellProps) {
+  const [meUser, setMeUser] = React.useState<MeUser | null>(null)
+
+  React.useEffect(() => {
+    let cancelled = false
+
+    async function loadMe() {
+      try {
+        // Use plain fetch — cookie pos_session_v1 is sent automatically
+        const res = await fetch('/api/me', { method: 'GET', cache: 'no-store' })
+        if (!res.ok) return
+        const data = (await res.json()) as MeResponse
+        if (cancelled) return
+        if (data.user) setMeUser(data.user)
+      } catch {
+        if (cancelled) return
+      }
     }
 
-    const userId = parseInt(session.userId, 10);
+    void loadMe()
 
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        roleId: true,
-        locationId: true,
-        avatarColor: true,
-      },
-    });
+    // Re-fetch on window focus (after switching user)
+    const onFocus = () => { void loadMe() }
+    window.addEventListener('focus', onFocus)
 
-    console.log('[ME] session userId:', session.userId, '→ user:', user ? `${user.firstName} ${user.lastName} (id:${user.id})` : 'NOT FOUND')
+    return () => {
+      cancelled = true
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [])
 
-    return NextResponse.json({ user });
-  } catch (e) {
-    console.error('[ME] error', e)
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const user = React.useMemo(
+    () => ({
+      name: meUser ? `${meUser.firstName} ${meUser.lastName}`.trim() || 'User' : 'User',
+      avatar: undefined as string | undefined,
+      avatarColor: meUser?.avatarColor ?? undefined,
+    }),
+    [meUser]
+  )
+
+  return (
+    <div className={cn('min-h-screen bg-background', className)}>
+      <SidebarNav user={user} />
+
+      <main className="min-w-0 md:pl-[84px]">
+        {children}
+      </main>
+
+      <BottomNav />
+      <Toaster />
+    </div>
+  )
 }

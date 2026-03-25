@@ -1,8 +1,8 @@
 'use client'
 
 import * as React from 'react'
-import { useRouter } from 'next/navigation'
-import type { Route } from 'next'
+import { useSearchParams } from 'next/navigation'
+
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -46,7 +46,7 @@ function markSeen() {
 
 // ─── Bell dropdown ─────────────────────────────────────────────────────────────
 
-function BellPanel({ tickets, onClose }: { tickets: LogTicket[]; onClose: () => void }) {
+function BellPanel({ tickets}: { tickets: LogTicket[]; onClose: () => void }) {
   const recent = tickets.slice(0, 10)
   return (
     <div
@@ -282,8 +282,8 @@ function PinDots({ length, filled, shake }: { length: number; filled: number; sh
 
 // ─── PIN pad modal ─────────────────────────────────────────────────────────────
 
-function PinModal({ user, onCancel }: { user: LoginUser; onCancel: () => void }) {
-  const router                  = useRouter()
+function PinModal({ user, onCancel, redirectTo = '/stats' }: { user: LoginUser; onCancel: () => void; redirectTo?: string }) {
+ 
   const [pin, setPin]           = React.useState('')
   const [error, setError]       = React.useState<string | null>(null)
   const [shake, setShake]       = React.useState(false)
@@ -308,7 +308,7 @@ function PinModal({ user, onCancel }: { user: LoginUser; onCancel: () => void })
         setTimeout(() => setShake(false), 500)
       } else {
         // Full reload so (app)/layout.tsx re-fetches the new user from /api/me
-        window.location.href = '/stats'
+        window.location.href = redirectTo
       }
     } catch {
       setError('Connection error')
@@ -415,6 +415,8 @@ function PinModal({ user, onCancel }: { user: LoginUser; onCancel: () => void })
 // ─── Main login page ────────────────────────────────────────────────────────────
 
 export default function LoginPage() {
+  const searchParams            = useSearchParams()
+  const redirectTo              = searchParams.get('from') ?? '/stats'
   const [users, setUsers]       = React.useState<LoginUser[]>([])
   const [loading, setLoading]   = React.useState(true)
   const [selected, setSelected] = React.useState<LoginUser | null>(null)
@@ -522,7 +524,7 @@ export default function LoginPage() {
 
       {/* PIN modal */}
       {selected && (
-        <PinModal user={selected} onCancel={() => setSelected(null)} />
+        <PinModal user={selected} onCancel={() => setSelected(null)} redirectTo={redirectTo} />
       )}
     </>
   )

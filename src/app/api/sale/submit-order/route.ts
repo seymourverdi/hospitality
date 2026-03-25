@@ -373,6 +373,7 @@ export async function POST(request: Request) {
               terminalId: terminal.id,
               createdByUserId: openedByUser.id,
               status: 'OPEN',
+              scheduledTime: body.scheduledTime ? new Date(body.scheduledTime) : null,
             },
           })
 

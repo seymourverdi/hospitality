@@ -163,7 +163,7 @@ function PopularItemsCard({ period, items }: { period: string; items: PopularIte
         <p className="text-white/30 text-sm text-center py-4">No data</p>
       ) : (
         <div className="space-y-3">
-          {items.map((item, i) => (
+          {items.map((item) => (
             <div key={item.menuItemId} className="flex items-center gap-3">
               <span className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-white/70 text-sm font-bold flex-shrink-0">
                 {item.count}

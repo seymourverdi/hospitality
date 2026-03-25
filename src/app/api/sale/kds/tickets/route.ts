@@ -21,7 +21,8 @@ type UiTicket = {
   course: string | null
   time: string
   elapsed: string
-  status: 'incoming' | 'fired' | 'complete'
+  status: 'incoming' | 'fired' | 'complete' | 'scheduled'
+  scheduledTime: string | null
   items: UiTicketItem[]
 }
 
@@ -46,10 +47,17 @@ function formatElapsed(from: Date): string {
 
 function mapTicketStatus(
   status: 'OPEN' | 'COMPLETED' | 'CANCELLED',
-  itemStatuses: Array<'PENDING' | 'IN_PROGRESS' | 'READY' | 'SERVED'>
-): 'incoming' | 'fired' | 'complete' {
+  itemStatuses: Array<'PENDING' | 'IN_PROGRESS' | 'READY' | 'SERVED'>,
+  scheduledTime: Date | null,
+): 'incoming' | 'fired' | 'complete' | 'scheduled' {
   if (status === 'COMPLETED') {
     return 'complete'
+  }
+
+  // If scheduled for the future and not yet started → show in Scheduled tab
+  if (scheduledTime && scheduledTime > new Date()) {
+    const anyStarted = itemStatuses.some(s => s === 'IN_PROGRESS' || s === 'READY' || s === 'SERVED')
+    if (!anyStarted) return 'scheduled'
   }
 
   if (itemStatuses.length === 0) {
@@ -77,9 +85,10 @@ export async function GET() {
           in: ['OPEN', 'COMPLETED'],
         },
       },
-      orderBy: {
-        createdAt: 'desc',
-      },
+      orderBy: [
+        { scheduledTime: 'asc' },
+        { createdAt: 'desc' },
+      ],
       include: {
         table: {
           select: {
@@ -129,7 +138,8 @@ export async function GET() {
 
     const mapped: UiTicket[] = tickets.map((ticket) => {
       const itemStatuses = ticket.items.map((item) => item.orderItem.kdsStatus)
-      const uiStatus = mapTicketStatus(ticket.status, itemStatuses)
+      const scheduledTime = ticket.scheduledTime ?? null
+      const uiStatus = mapTicketStatus(ticket.status, itemStatuses, scheduledTime)
 
       const items: UiTicketItem[] = ticket.items.map((ticketItem) => {
         const modifierText =
@@ -164,6 +174,7 @@ export async function GET() {
         time: formatClock(ticket.createdAt),
         elapsed: formatElapsed(ticket.createdAt),
         status: uiStatus,
+        scheduledTime: scheduledTime ? formatClock(scheduledTime) : null,
         items,
       }
     })

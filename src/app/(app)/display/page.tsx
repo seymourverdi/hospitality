@@ -39,8 +39,45 @@ const COL = {
   incoming:  { header: '#C0392B', body: 'rgba(192,57,43,0.15)',  border: '#C0392B' },
   fired:     { header: '#6C3483', body: 'rgba(108,52,131,0.15)', border: '#8E44AD' },
   complete:  { header: '#1E8449', body: 'rgba(30,132,73,0.15)',  border: '#27AE60' },
-  scheduled: { header: '#C0392B', body: 'rgba(192,57,43,0.15)',  border: '#C0392B' },
+  scheduled: { header: '#1A5276', body: 'rgba(26,82,118,0.20)',  border: '#2E86C1' },
 };
+
+// ─── Scheduled countdown timer ────────────────────────────────────────────────
+
+function ScheduledCountdown({ scheduledTime }: { scheduledTime: string }) {
+  const [remaining, setRemaining] = React.useState('');
+
+  React.useEffect(() => {
+    function calc() {
+      // scheduledTime is like "1:30 PM" — parse as today's time
+      const now = new Date();
+      const [time, period] = scheduledTime.split(' ');
+      const [hStr, mStr] = (time ?? '').split(':');
+      let h = parseInt(hStr ?? '0');
+      const m = parseInt(mStr ?? '0');
+      if (period === 'PM' && h !== 12) h += 12;
+      if (period === 'AM' && h === 12) h = 0;
+      const target = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m, 0);
+      if (target < now) target.setDate(target.getDate() + 1);
+      const diff = Math.max(0, Math.floor((target.getTime() - now.getTime()) / 1000));
+      const hrs = Math.floor(diff / 3600);
+      const mins = Math.floor((diff % 3600) / 60);
+      const secs = diff % 60;
+      if (hrs > 0) setRemaining(`${hrs}h ${mins}m`);
+      else if (mins > 0) setRemaining(`${mins}m ${secs}s`);
+      else setRemaining(`${secs}s`);
+    }
+    calc();
+    const id = setInterval(calc, 1000);
+    return () => clearInterval(id);
+  }, [scheduledTime]);
+
+  return (
+    <span className="text-xs font-bold text-blue-200">
+      ⏱ {remaining}
+    </span>
+  );
+}
 
 // ─── Elapsed timer ────────────────────────────────────────────────────────────
 
@@ -182,14 +219,26 @@ function TicketCard({
           </span>
         )}
 
-        {ticket.scheduledTime && (
-          <span className="text-xs text-white/80 ml-1">{ticket.scheduledTime}</span>
+        {ticket.scheduledTime && ticket.status === 'scheduled' && (
+          <ScheduledCountdown scheduledTime={ticket.scheduledTime} />
+        )}
+        {ticket.scheduledTime && ticket.status !== 'scheduled' && (
+          <span className="text-xs text-white/60 ml-1">@ {ticket.scheduledTime}</span>
         )}
 
-        {/* Bump / Dismiss button */}
-        <div className="ml-auto">
-          {isComplete ? (
-            // Dismiss button for complete tickets
+        {/* Bump / Dismiss / Fire Now button */}
+        <div className="ml-auto flex items-center gap-1">
+          {ticket.status === 'scheduled' ? (
+            // Fire Now button for scheduled tickets
+            <button
+              type="button"
+              onClick={() => onBump(ticket.id)}
+              title="Fire now"
+              className="px-2 h-5 rounded text-xs font-semibold bg-blue-500 hover:bg-blue-400 text-white transition-colors"
+            >
+              Fire
+            </button>
+          ) : isComplete ? (
             <button
               type="button"
               onClick={() => onDismiss(ticket.id)}
@@ -201,7 +250,6 @@ function TicketCard({
               </svg>
             </button>
           ) : (
-            // Bump button for incoming/fired
             <button
               type="button"
               onClick={() => onBump(ticket.id)}
@@ -384,11 +432,11 @@ export default function DisplayPage() {
     if (!ticket) return;
 
     const action: 'start' | 'ready' | 'serve' =
-      ticket.status === 'incoming' ? 'start' :
-      ticket.status === 'fired'    ? 'ready' : 'serve';
+      (ticket.status === 'incoming' || ticket.status === 'scheduled') ? 'start' :
+      ticket.status === 'fired' ? 'ready' : 'serve';
 
     const nextTicketStatus: UiTicket['status'] =
-      ticket.status === 'incoming' ? 'fired' : 'complete';
+      (ticket.status === 'incoming' || ticket.status === 'scheduled') ? 'fired' : 'complete';
 
     // Optimistic
     setTickets(prev => prev.map(t => {

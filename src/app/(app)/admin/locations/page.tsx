@@ -182,7 +182,7 @@ export default function AdminLocationsPage() {
                   value={form.timezone}
                   onChange={(e) => setForm((prev) => ({ ...prev, timezone: e.target.value }))}
                   className="w-full h-11 rounded-lg bg-neutral-950 border border-white/10 px-3 outline-none"
-                  placeholder="Europe/Kiev"
+                  placeholder="America/Denver"
                 />
               </div>
 
