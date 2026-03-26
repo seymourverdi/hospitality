@@ -298,7 +298,7 @@ function PinModal({ user, onCancel, redirectTo = '/stats' }: { user: LoginUser; 
       const res  = await fetch('/api/auth/pin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pin: finalPin }),
+        body: JSON.stringify({ pin: finalPin, userId: user.id }),
       })
       const data = await res.json() as { ok: boolean; error?: string }
       if (!data.ok) {

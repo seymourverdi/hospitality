@@ -4,6 +4,7 @@ import { setPosSession } from '@/modules/pos/server/session/pos-session'
 
 type RequestBody = {
   pin?: string
+  userId?: number | null
   terminalId?: string | null
   locationId?: string | null
 }
@@ -14,6 +15,7 @@ export async function POST(request: Request) {
 
     const session = await pinLogin({
       pin: body.pin ?? '',
+      userId: body.userId ?? null,
       terminalId: body.terminalId ?? null,
       locationId: body.locationId ?? null,
     })

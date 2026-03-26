@@ -13,6 +13,7 @@ export class PinAuthError extends Error {
 
 type PinLoginInput = {
   pin: string
+  userId?: number | null
   terminalId?: string | null
   locationId?: string | null
 }
@@ -44,6 +45,7 @@ export async function pinLogin(input: PinLoginInput): Promise<PosSession> {
     where: {
       pinCode: pin,
       isActive: true,
+      ...(input.userId ? { id: input.userId } : {}),
     },
     include: {
       role: {

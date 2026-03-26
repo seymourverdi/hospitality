@@ -386,7 +386,7 @@ export default function DisplayPage() {
 
   React.useEffect(() => {
     void loadTickets();
-    const id = setInterval(() => void loadTickets(), 10000);
+    const id = setInterval(() => void loadTickets(), 3000);
     return () => clearInterval(id);
   }, [loadTickets]);
 

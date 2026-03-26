@@ -1,6 +1,43 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/server/db'
 
+// Never cache this route — display needs live data on every request
+export const dynamic = 'force-dynamic'
+
+// Explicit shape for the KitchenTicket findMany result with includes.
+// This is needed because the Prisma client may not have been regenerated after
+// schema changes (npx prisma generate). Once regenerated these types come for free.
+type TicketWithRelations = {
+  id: number
+  createdAt: Date
+  updatedAt: Date
+  locationId: number
+  terminalId: number
+  orderId: number
+  tableId: number | null
+  kdsStationId: number | null
+  createdByUserId: number
+  status: 'OPEN' | 'COMPLETED' | 'CANCELLED'
+  scheduledTime: Date | null
+  table: { id: number; name: string } | null
+  location: { id: number; name: string } | null
+  createdByUser: { firstName: string; lastName: string }
+  items: Array<{
+    id: number
+    ticketId: number
+    orderItemId: number
+    quantity: number
+    orderItem: {
+      kdsStatus: 'PENDING' | 'IN_PROGRESS' | 'READY' | 'SERVED'
+      seatNumber: number | null
+      menuItem: { name: string }
+      modifiers: Array<{
+        modifierOption: { name: string }
+      }>
+    }
+  }>
+}
+
 type UiTicketItem = {
   id: string
   ticketItemId: string
@@ -79,16 +116,15 @@ function mapTicketStatus(
 
 export async function GET() {
   try {
-    const tickets = await prisma.kitchenTicket.findMany({
+    const tickets = (await prisma.kitchenTicket.findMany({
       where: {
         status: {
           in: ['OPEN', 'COMPLETED'],
         },
       },
-      orderBy: [
-        { scheduledTime: 'asc' },
-        { createdAt: 'desc' },
-      ],
+      orderBy: {
+        createdAt: 'desc',
+      },
       include: {
         table: {
           select: {
@@ -134,7 +170,7 @@ export async function GET() {
           },
         },
       },
-    })
+    })) as TicketWithRelations[]
 
     const mapped: UiTicket[] = tickets.map((ticket) => {
       const itemStatuses = ticket.items.map((item) => item.orderItem.kdsStatus)
